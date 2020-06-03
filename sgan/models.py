@@ -27,8 +27,8 @@ def get_noise(shape, noise_type):
 
 class Encoder(nn.Module):
     def __init__(
-        self, embedding_dim=64, h_dim=64, mlp_dim=1024, num_layers=1,
-        dropout=0.0
+            self, embedding_dim=64, h_dim=64, mlp_dim=1024, num_layers=1,
+            dropout=0.0
     ):
         super(Encoder, self).__init__()
 
@@ -61,10 +61,10 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(
-        self, seq_len, embedding_dim=64, h_dim=128, mlp_dim=1024, num_layers=1,
-        pool_every_timestep=True, dropout=0.0, bottleneck_dim=1024,
-        activation='relu', batch_norm=True, pooling_type='pool_net',
-        neighborhood_size=2.0, grid_size=8
+            self, seq_len, embedding_dim=64, h_dim=128, mlp_dim=1024, num_layers=1,
+            pool_every_timestep=True, dropout=0.0, bottleneck_dim=1024,
+            activation='relu', batch_norm=True, pooling_type='pool_net',
+            neighborhood_size=2.0, grid_size=8
     ):
         super(Decoder, self).__init__()
 
@@ -88,15 +88,6 @@ class Decoder(nn.Module):
                     activation=activation,
                     batch_norm=batch_norm,
                     dropout=dropout
-                )
-            elif pooling_type == 'spool':
-                self.pool_net = SocialPooling(
-                    h_dim=self.h_dim,
-                    activation=activation,
-                    batch_norm=batch_norm,
-                    dropout=dropout,
-                    neighborhood_size=neighborhood_size,
-                    grid_size=grid_size
                 )
 
             mlp_dims = [h_dim + bottleneck_dim, mlp_dim, h_dim]
@@ -143,8 +134,8 @@ class Decoder(nn.Module):
 
 class PoolHiddenNet(nn.Module):
     def __init__(
-        self, embedding_dim=64, h_dim=64, mlp_dim=1024, bottleneck_dim=1024,
-        activation='relu', batch_norm=True, dropout=0.0
+            self, embedding_dim=64, h_dim=64, mlp_dim=1024, bottleneck_dim=1024,
+            activation='relu', batch_norm=True, dropout=0.0
     ):
         super(PoolHiddenNet, self).__init__()
 
@@ -193,114 +184,13 @@ class PoolHiddenNet(nn.Module):
         return pool_h
 
 
-class SocialPooling(nn.Module):
-    def __init__(
-        self, h_dim=64, activation='relu', batch_norm=True, dropout=0.0,
-        neighborhood_size=2.0, grid_size=8, pool_dim=None
-    ):
-        super(SocialPooling, self).__init__()
-        self.h_dim = h_dim
-        self.grid_size = grid_size
-        self.neighborhood_size = neighborhood_size
-        if pool_dim:
-            mlp_pool_dims = [grid_size * grid_size * h_dim, pool_dim]
-        else:
-            mlp_pool_dims = [grid_size * grid_size * h_dim, h_dim]
-
-        self.mlp_pool = make_mlp(
-            mlp_pool_dims,
-            activation=activation,
-            batch_norm=batch_norm,
-            dropout=dropout
-        )
-
-    def get_bounds(self, ped_pos):
-        top_left_x = ped_pos[:, 0] - self.neighborhood_size / 2
-        top_left_y = ped_pos[:, 1] + self.neighborhood_size / 2
-        bottom_right_x = ped_pos[:, 0] + self.neighborhood_size / 2
-        bottom_right_y = ped_pos[:, 1] - self.neighborhood_size / 2
-        top_left = torch.stack([top_left_x, top_left_y], dim=1)
-        bottom_right = torch.stack([bottom_right_x, bottom_right_y], dim=1)
-        return top_left, bottom_right
-
-    def get_grid_locations(self, top_left, other_pos):
-        cell_x = torch.floor(
-            ((other_pos[:, 0] - top_left[:, 0]) / self.neighborhood_size) *
-            self.grid_size)
-        cell_y = torch.floor(
-            ((top_left[:, 1] - other_pos[:, 1]) / self.neighborhood_size) *
-            self.grid_size)
-        grid_pos = cell_x + cell_y * self.grid_size
-        return grid_pos
-
-    def repeat(self, tensor, num_reps):
-        col_len = tensor.size(1)
-        tensor = tensor.unsqueeze(dim=1).repeat(1, num_reps, 1)
-        tensor = tensor.view(-1, col_len)
-        return tensor
-
-    def forward(self, h_states, seq_start_end, end_pos):
-        pool_h = []
-        for _, (start, end) in enumerate(seq_start_end):
-            start = start.item()
-            end = end.item()
-            num_ped = end - start
-            grid_size = self.grid_size * self.grid_size
-            curr_hidden = h_states.view(-1, self.h_dim)[start:end]
-            curr_hidden_repeat = curr_hidden.repeat(num_ped, 1)
-            curr_end_pos = end_pos[start:end]
-            curr_pool_h_size = (num_ped * grid_size) + 1
-            curr_pool_h = curr_hidden.new_zeros((curr_pool_h_size, self.h_dim))
-            # curr_end_pos = curr_end_pos.data
-            top_left, bottom_right = self.get_bounds(curr_end_pos)
-
-            # Repeat position -> P1, P2, P1, P2
-            curr_end_pos = curr_end_pos.repeat(num_ped, 1)
-            # Repeat bounds -> B1, B1, B2, B2
-            top_left = self.repeat(top_left, num_ped)
-            bottom_right = self.repeat(bottom_right, num_ped)
-
-            grid_pos = self.get_grid_locations(
-                    top_left, curr_end_pos).type_as(seq_start_end)
-            # Make all positions to exclude as non-zero
-            # Find which peds to exclude
-            x_bound = ((curr_end_pos[:, 0] >= bottom_right[:, 0]) +
-                       (curr_end_pos[:, 0] <= top_left[:, 0]))
-            y_bound = ((curr_end_pos[:, 1] >= top_left[:, 1]) +
-                       (curr_end_pos[:, 1] <= bottom_right[:, 1]))
-
-            within_bound = x_bound + y_bound
-            within_bound[0::num_ped + 1] = 1  # Don't include the ped itself
-            within_bound = within_bound.view(-1)
-
-
-            grid_pos += 1
-            total_grid_size = self.grid_size * self.grid_size
-            offset = torch.arange(
-                0, total_grid_size * num_ped, total_grid_size
-            ).type_as(seq_start_end)
-
-            offset = self.repeat(offset.view(-1, 1), num_ped).view(-1)
-            grid_pos += offset
-            grid_pos[within_bound != 0] = 0
-            grid_pos = grid_pos.view(-1, 1).expand_as(curr_hidden_repeat)
-
-            curr_pool_h = curr_pool_h.scatter_add(0, grid_pos,curr_hidden_repeat)
-            curr_pool_h = curr_pool_h[1:]
-            pool_h.append(curr_pool_h.view(num_ped, -1))
-
-        pool_h = torch.cat(pool_h, dim=0)
-        pool_h = self.mlp_pool(pool_h)
-        return pool_h
-
-
 class TrajectoryGenerator(nn.Module):
     def __init__(
-        self, obs_len, pred_len, embedding_dim=64, encoder_h_dim=64,
-        decoder_h_dim=128, mlp_dim=1024, num_layers=1, noise_dim=(0, ),
-        noise_type='gaussian', noise_mix_type='ped', pooling_type=None,
-        pool_every_timestep=True, dropout=0.0, bottleneck_dim=1024,
-        activation='relu', batch_norm=True, neighborhood_size=2.0, grid_size=8, skip=1
+            self, obs_len, pred_len, embedding_dim=64, encoder_h_dim=64,
+            decoder_h_dim=128, mlp_dim=1024, num_layers=1, noise_dim=(0,),
+            noise_type='gaussian', noise_mix_type='ped', pooling_type=None,
+            pool_every_timestep=True, dropout=0.0, bottleneck_dim=1024,
+            activation='relu', batch_norm=True, neighborhood_size=2.0, grid_size=8, skip=1
     ):
         super(TrajectoryGenerator, self).__init__()
 
@@ -356,15 +246,6 @@ class TrajectoryGenerator(nn.Module):
                 activation=activation,
                 batch_norm=batch_norm
             )
-        elif pooling_type == 'spool':
-            self.pool_net = SocialPooling(
-                h_dim=encoder_h_dim,
-                activation=activation,
-                batch_norm=batch_norm,
-                dropout=dropout,
-                neighborhood_size=neighborhood_size,
-                grid_size=grid_size
-            )
 
         if self.noise_dim[0] == 0:
             self.noise_dim = None
@@ -394,9 +275,9 @@ class TrajectoryGenerator(nn.Module):
             return _input
 
         if self.noise_mix_type == 'global':
-            noise_shape = (seq_start_end.size(0), ) + self.noise_dim
+            noise_shape = (seq_start_end.size(0),) + self.noise_dim
         else:
-            noise_shape = (_input.size(0), ) + self.noise_dim
+            noise_shape = (_input.size(0),) + self.noise_dim
 
         if user_noise is not None:
             z_decoder = user_noise
@@ -420,8 +301,8 @@ class TrajectoryGenerator(nn.Module):
 
     def mlp_decoder_needed(self):
         if (
-            self.noise_dim or self.pooling_type or
-            self.encoder_h_dim != self.decoder_h_dim
+                self.noise_dim or self.pooling_type or
+                self.encoder_h_dim != self.decoder_h_dim
         ):
             return True
         else:
@@ -477,10 +358,12 @@ class TrajectoryGenerator(nn.Module):
 
         return pred_traj_fake_rel
 
+
 class EncoderDiscriminator(nn.Module):
     """This Encoder is part of TrajectoryDiscriminator"""
+
     def __init__(
-        self, embedding_dim=64, h_dim=64, mlp_dim=1024, num_layers=1,dropout=0.0
+            self, embedding_dim=64, h_dim=64, mlp_dim=1024, num_layers=1, dropout=0.0
     ):
         super(EncoderDiscriminator, self).__init__()
 
@@ -502,7 +385,7 @@ class EncoderDiscriminator(nn.Module):
         batch = obs_traj.size(1)
         obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
         obs_traj_embedding = obs_traj_embedding.view(-1, batch, self.embedding_dim)
-        obs_traj_embedding_for_skip = obs_traj_embedding.permute(1,0,2);
+        obs_traj_embedding_for_skip = obs_traj_embedding.permute(1, 0, 2);
         skip_condition = torch.ones((1, 1), device='cuda') * skip
         skip_condition_embedding = torch.nn.Linear(1, obs_traj_embedding_for_skip.size(1)).to(torch.device("cuda:0"))
         skip_condition = skip_condition_embedding(skip_condition)
@@ -516,9 +399,10 @@ class EncoderDiscriminator(nn.Module):
         final_h = state[0]
         return final_h
 
+
 class TrajectoryDiscriminator(nn.Module):
     def __init__(self, obs_len, pred_len, embedding_dim=64, h_dim=64, mlp_dim=1024, skip=1,
-        num_layers=1, activation='relu', batch_norm=True, dropout=0.0,d_type='local'):
+                 num_layers=1, activation='relu', batch_norm=True, dropout=0.0, d_type='local'):
         super(TrajectoryDiscriminator, self).__init__()
 
         self.obs_len = obs_len

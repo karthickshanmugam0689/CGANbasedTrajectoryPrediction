@@ -59,7 +59,7 @@ parser.add_argument('--g_steps', default=1, type=int)
 
 # Pooling Options
 parser.add_argument('--pooling_type', default='pool_net')
-parser.add_argument('--pool_every_timestep', default=1, type=bool_flag)
+parser.add_argument('--pool_every_timestep', default=0, type=bool_flag)
 
 # Pool Net Option
 parser.add_argument('--bottleneck_dim', default=1024, type=int)
@@ -160,20 +160,15 @@ def get_skipped_obs_pred_len_size(array_of_seq_len, user_speed_condition, obs_le
 
 
 def main(args):
-    mock_array_of_seq_len = get_mock_seq_array(args.obs_len, args.pred_len)
-    no_of_possible_conditions = get_possible_skip_conditions(mock_array_of_seq_len)
-    print(no_of_possible_conditions)
-    skip = convert_continuous_speed_to_discrete(no_of_possible_conditions, args.speed)
-    skip_obs_len, skip_pred_len = get_skipped_obs_pred_len_size(mock_array_of_seq_len, skip, args.obs_len, args.pred_len)
 
-    train_path = "C:/Users/visha/MasterThesis/sgan/datasets/eth/train"
-    val_path = "C:/Users/visha/MasterThesis/sgan/datasets/eth/val"
-    long_dtype, float_dtype = get_dtypes(args)
-    print(torch.cuda.is_available())
+    train_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/train"
+    val_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/val"
+    # long_dtype, float_dtype = get_dtypes(args)
+    # print(torch.cuda.is_available())
     logger.info("Initializing train dataset")
-    train_dset, train_loader = data_loader(args, train_path, skip, skip_obs_len, skip_pred_len)
+    train_dset, train_loader = data_loader(args, train_path)
     logger.info("Initializing val dataset")
-    _, val_loader = data_loader(args, val_path, skip, skip_obs_len, skip_pred_len)
+    _, val_loader = data_loader(args, val_path)
 
     iterations_per_epoch = len(train_dset) / args.batch_size / args.d_steps
     if args.num_epochs:
@@ -203,7 +198,7 @@ def main(args):
         batch_norm=args.batch_norm)
 
     generator.apply(init_weights)
-    generator.type(float_dtype).train()
+    generator.type(torch.FloatTensor).train()
     logger.info('Here is the generator:')
     logger.info(generator)
 
@@ -219,7 +214,7 @@ def main(args):
         d_type=args.d_type)
 
     discriminator.apply(init_weights)
-    discriminator.type(float_dtype).train()
+    discriminator.type(torch.FloatTensor).train()
     logger.info('Here is the discriminator:')
     logger.info(discriminator)
 
@@ -287,7 +282,7 @@ def main(args):
         logger.info('Starting epoch {}'.format(epoch))
         for batch in train_loader:
             if args.timing == 1:
-                torch.cuda.synchronize()
+                # torch.cuda.synchronize()
                 t1 = time.time()
 
             # Decide whether to use the batch for stepping on discriminator or
@@ -312,7 +307,7 @@ def main(args):
                 g_steps_left -= 1
 
             if args.timing == 1:
-                torch.cuda.synchronize()
+                # torch.cuda.synchronize()
                 t2 = time.time()
                 logger.info('{} step took {}'.format(step_type, t2 - t1))
 
@@ -417,13 +412,13 @@ def main(args):
 def discriminator_step(
         args, batch, generator, discriminator, d_loss_fn, optimizer_d
 ):
-    batch = [tensor.cuda() for tensor in batch]
+    batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
-     loss_mask, seq_start_end) = batch
+     loss_mask, seq_start_end, ped_speed) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
 
-    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end)
+    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, ped_speed)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -433,8 +428,8 @@ def discriminator_step(
     traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
     traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
 
-    scores_fake = discriminator(traj_fake, traj_fake_rel, seq_start_end)
-    scores_real = discriminator(traj_real, traj_real_rel, seq_start_end)
+    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
+    scores_real = discriminator(traj_real, traj_real_rel, ped_speed, seq_start_end)
 
     # Compute loss with optional gradient penalty
     data_loss = d_loss_fn(scores_real, scores_fake)
@@ -455,7 +450,7 @@ def discriminator_step(
 def generator_step(
         args, batch, generator, discriminator, g_loss_fn, optimizer_g
 ):
-    batch = [tensor.cuda() for tensor in batch]
+    batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
      loss_mask, seq_start_end) = batch
     losses = {}
@@ -523,7 +518,7 @@ def check_accuracy(
     generator.eval()
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor.cuda() for tensor in batch]
+            batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
              non_linear_ped, loss_mask, seq_start_end) = batch
             linear_ped = 1 - non_linear_ped

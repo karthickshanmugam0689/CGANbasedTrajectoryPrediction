@@ -48,18 +48,18 @@ def get_total_norm(parameters, norm_type=2):
 @contextmanager
 def timeit(msg, should_time=True):
     if should_time:
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         t0 = time.time()
     yield
     if should_time:
-        torch.cuda.synchronize()
+        #torch.cuda.synchronize()
         t1 = time.time()
         duration = (t1 - t0) * 1000.0
         print('%s: %.2f ms' % (msg, duration))
 
 
 def get_gpu_memory():
-    torch.cuda.synchronize()
+    # torch.cuda.synchronize()
     opts = [
         'nvidia-smi', '-q', '--gpu=' + str(1), '|', 'grep', '"Used GPU Memory"'
     ]

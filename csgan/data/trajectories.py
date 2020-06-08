@@ -129,14 +129,14 @@ class TrajectoryDataset(Dataset):
                     pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
                     if pad_end - pad_front != self.seq_len:
                         continue
-                    curr_ped_x_axis_new = [0.0] + [np.square(s - t) for s, t in zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
-                    curr_ped_y_axis_new = [0.0] + [np.square(s - t) for s, t in zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
+                    curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
+                    curr_ped_seq = curr_ped_seq
+                    curr_ped_x_axis_new = [0.0] + [np.square(s - t) for s, t in zip(curr_ped_seq[0, :], curr_ped_seq[0, 1:])]
+                    curr_ped_y_axis_new = [0.0] + [np.square(s - t) for s, t in zip(curr_ped_seq[1, :], curr_ped_seq[1, 1:])]
                     curr_ped_rel_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                     curr_ped_rel_speed = curr_ped_rel_dist/ 0.4
                     curr_ped_rel_speed = [0] + [1 if (s < t) else 0 for s, t in zip(curr_ped_rel_speed[:], curr_ped_rel_speed[1:])]
-                    curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
-                    curr_ped_seq = curr_ped_seq
                     # Make coordinates relative
                     rel_curr_ped_seq = np.zeros(curr_ped_seq.shape)
                     rel_curr_ped_seq[:, 1:] = curr_ped_seq[:, 1:] - curr_ped_seq[:, :-1]

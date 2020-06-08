@@ -369,8 +369,8 @@ class EncoderDiscriminator(nn.Module):
         self.h_dim = h_dim
         self.embedding_dim = embedding_dim
         self.num_layers = num_layers
-        self.encoder = nn.LSTM(embedding_dim + 1, h_dim, num_layers, dropout=dropout)
-        self.spatial_embedding = nn.Linear(2, embedding_dim)
+        self.encoder = nn.LSTM(embedding_dim, h_dim, num_layers, dropout=dropout)
+        self.spatial_embedding = nn.Linear(3, embedding_dim)
 
     def init_hidden(self, batch):  # This is where we'll initialise our hidden state as
         return (
@@ -380,12 +380,13 @@ class EncoderDiscriminator(nn.Module):
 
     def forward(self, obs_traj, ped_speed):
         batch = obs_traj.size(1)
-        obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
-        obs_traj_embedding = obs_traj_embedding.view(-1, batch, self.embedding_dim)
-# NEED TO ADD THE SPEED CONDITION SOMEWHERE HERE - :D
-        obs_traj_embedding = obs_traj_embedding.permute(1, 0, 2)
+        ped_speed_embedding = ped_speed.unsqueeze(dim=2)
+        obs_traj_embedding = obs_traj.permute(1, 0, 2)
+        obs_traj_speed = torch.cat([obs_traj_embedding, ped_speed_embedding], dim=2)
+        obs_traj_speed_embedding = self.spatial_embedding(obs_traj_speed.contiguous().view(-1, 3))
+        obs_traj_speed_embedding = obs_traj_speed_embedding.view(-1, batch, self.embedding_dim)
         state_tuple = self.init_hidden(batch)
-        output, state = self.encoder(obs_traj_embedding, state_tuple)
+        output, state = self.encoder(obs_traj_speed_embedding, state_tuple)
         final_h = state[0]
         return final_h
 

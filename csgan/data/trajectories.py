@@ -7,6 +7,13 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
+import hdbscan
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,6 +75,64 @@ def poly_fit(traj, traj_len, threshold):
     else:
         return 0.0
 
+def get_speed_labels(num_sequences, frame_data, seq_len, frames):
+    logger.info("Clustering to find labels")
+    ped_speed = []
+    for idx in range(0, num_sequences):
+        curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)
+        curr_ped_frame_seq = np.unique(curr_seq_data[:, 0]).tolist()
+        peds_in_curr_seq = np.unique(curr_seq_data[:, 1])
+        _curr_ped_speed = np.empty((16, 1))
+        for _, ped_id in enumerate(peds_in_curr_seq):
+            curr_ped_seq = curr_seq_data[curr_seq_data[:, 1] == ped_id, :]
+            curr_ped_seq = np.around(curr_ped_seq, decimals=4)
+            pad_front = frames.index(curr_ped_seq[0, 0]) - idx
+            pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
+            if pad_end - pad_front != seq_len:
+                continue
+            curr_ped_x_axis_new = [0.0] + [np.abs(s - t) for s, t in
+                                           zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
+            curr_ped_y_axis_new = [0.0] + [np.abs(s - t) for s, t in
+                                           zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
+            curr_ped_dist_formula = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
+            curr_ped_dist_formula = curr_ped_dist_formula / 0.4
+            for a, b in zip(curr_ped_frame_seq, curr_ped_dist_formula):
+                ped_speed.append([a, ped_id, b])
+    ped_speed = np.asarray(ped_speed)
+    km = KMeans(5)
+    clusters = km.fit_predict(ped_speed[:, 2].reshape(-1, 1))
+
+    # Annotating the labels using python scripts
+    no_of_labels = np.unique(clusters)
+    clus_test = np.concatenate((ped_speed, clusters.reshape(-1, 1)), axis=1)
+    min_max_range = []
+
+    for a in no_of_labels:
+        label = clus_test[clus_test[:, 3] == a, :]
+        label = label[:, 2]
+        min_max_label = (min(label), max(label))
+        min_max_range.append(min_max_label)
+    sorted_labels = sorted(min_max_range)
+    sorted_labels = np.array(sorted_labels)
+    cluster_labels_sorted = []
+
+    for b in ped_speed[:, 2]:
+        for idx, a in enumerate(sorted_labels):
+            if (b >= a[0]) and (b <= a[1]):
+                cluster_labels_sorted.append([b, idx])
+
+
+    cluster_labels_sorted = np.array(cluster_labels_sorted)
+    clusters = cluster_labels_sorted[:, 1]
+    ped_speed = np.concatenate((ped_speed, clusters.reshape(-1, 1)), axis=1)
+
+    # PLOTTING
+    # plt.scatter(ped_speed[:, 0], ped_speed[:, 2], c=cluster_labels_sorted[:, 1])
+    # plt.title("Clustering of Speed labels with K")
+    # plt.xlabel("Pedestrian ID")
+    # plt.ylabel("Speed")
+    # plt.show()
+    return ped_speed
 
 class TrajectoryDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
@@ -111,10 +176,12 @@ class TrajectoryDataset(Dataset):
             for frame in frames:
                 frame_data.append(data[frame == data[:, 0], :])
             num_sequences = int(math.ceil((len(frames) - self.seq_len + 1) / skip))
-
+            clusters = get_speed_labels(num_sequences, frame_data, self.seq_len, frames)
+            counter = 0
             for idx in range(0, num_sequences * self.skip + 1, skip):
                 curr_seq_data = np.concatenate(
                     frame_data[idx:idx + self.seq_len], axis=0)
+                curr_ped_frame_seq = np.unique(curr_seq_data[:, 0])
                 peds_in_curr_seq = np.unique(curr_seq_data[:, 1])
                 curr_seq_rel = np.zeros((len(peds_in_curr_seq), 2, self.seq_len))
                 curr_seq = np.zeros((len(peds_in_curr_seq), 2, self.seq_len))
@@ -129,14 +196,26 @@ class TrajectoryDataset(Dataset):
                     pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
                     if pad_end - pad_front != self.seq_len:
                         continue
+                    curr_ped_x_axis_new = [0.0] + [np.abs(s - t) for s, t in
+                                                   zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
+                    curr_ped_y_axis_new = [0.0] + [np.abs(s - t) for s, t in
+                                                   zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
+                    curr_ped_dist = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
+                    # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
+                    curr_ped_rel_speed = curr_ped_dist / 0.4
+                    clusters[:, 3] = np.array(clusters[:, 3], dtype=np.int8)
+
+                    frames_from_cluster_data = clusters[counter:counter + self.seq_len, 0]
+                    speed_from_cluster_data = clusters[counter:counter + self.seq_len, 2]
+
+                    if (frames_from_cluster_data == curr_ped_frame_seq).all() and (speed_from_cluster_data == curr_ped_rel_speed).all():
+                        cluster_label_for_ped = clusters[counter:counter+self.seq_len, 3]
+                        cluster_label_for_ped = cluster_label_for_ped.reshape(-1, 1)
+                        cluster_label_transposed = np.transpose(cluster_label_for_ped)
+                    counter += 1
+
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
                     curr_ped_seq = curr_ped_seq
-                    curr_ped_x_axis_new = [0.0] + [np.square(s - t) for s, t in zip(curr_ped_seq[0, :], curr_ped_seq[0, 1:])]
-                    curr_ped_y_axis_new = [0.0] + [np.square(s - t) for s, t in zip(curr_ped_seq[1, :], curr_ped_seq[1, 1:])]
-                    curr_ped_rel_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
-                    # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
-                    curr_ped_rel_speed = curr_ped_rel_dist/ 0.4
-                    curr_ped_rel_speed = [0] + [1 if (s < t) else 0 for s, t in zip(curr_ped_rel_speed[:], curr_ped_rel_speed[1:])]
                     # Make coordinates relative
                     rel_curr_ped_seq = np.zeros(curr_ped_seq.shape)
                     rel_curr_ped_seq[:, 1:] = curr_ped_seq[:, 1:] - curr_ped_seq[:, :-1]
@@ -146,7 +225,7 @@ class TrajectoryDataset(Dataset):
                     # Linear vs Non-Linear Trajectory
                     _non_linear_ped.append(poly_fit(curr_ped_seq, pred_len, threshold))
                     curr_loss_mask[_idx, pad_front:pad_end] = 1
-                    _curr_ped_speed[_idx, pad_front:pad_end] = curr_ped_rel_speed
+                    _curr_ped_speed[_idx, pad_front:pad_end] = cluster_label_transposed
                     num_peds_considered += 1
 
                 if num_peds_considered > min_ped:
@@ -191,6 +270,6 @@ class TrajectoryDataset(Dataset):
             self.obs_traj[start:end, :], self.pred_traj[start:end, :],
             self.obs_traj_rel[start:end, :], self.pred_traj_rel[start:end, :],
             self.non_linear_ped[start:end], self.loss_mask[start:end, :],
-            self.ped_speed [start:end, :]
+            self.ped_speed[start:end, :]
         ]
         return out

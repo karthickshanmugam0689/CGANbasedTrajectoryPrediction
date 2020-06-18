@@ -149,6 +149,7 @@ class PoolHiddenNet(nn.Module):
 
         self.spatial_embedding = nn.Linear(2, embedding_dim)
         self.speed_embedding = nn.Linear(16, embedding_dim)
+        self.speed_embedding_sigmoid_layer = nn.Sigmoid()
         self.mlp_pre_pool = make_mlp(
             mlp_pre_pool_dims,
             activation=activation,
@@ -163,6 +164,7 @@ class PoolHiddenNet(nn.Module):
 
     def forward(self, h_states, seq_start_end, end_pos, ped_speed):
         pool_h = []
+        ped_speed = self.speed_embedding_sigmoid_layer(ped_speed)
         for _, (start, end) in enumerate(seq_start_end):
             start = start.item()
             end = end.item()

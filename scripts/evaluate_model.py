@@ -62,14 +62,14 @@ def evaluate(args, loader, generator, num_samples):
         for batch in loader:
             batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
-             non_linear_ped, loss_mask, seq_start_end, ped_speed) = batch
+             non_linear_ped, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
 
             ade, fde = [], []
             total_traj += pred_traj_gt.size(1)
 
             for _ in range(num_samples):
                 pred_traj_fake_rel = generator(
-                    obs_traj, obs_traj_rel, seq_start_end, ped_speed
+                    obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed
                 )
                 pred_traj_fake = relative_to_abs(
                     pred_traj_fake_rel, obs_traj[-1]

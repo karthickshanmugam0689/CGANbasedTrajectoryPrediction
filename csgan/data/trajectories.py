@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def seq_collate(data):
     (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list,
-     non_linear_ped_list, loss_mask_list, ped_speed) = zip(*data)
+     non_linear_ped_list, loss_mask_list, obs_ped_speed, pred_ped_speed) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -34,11 +34,12 @@ def seq_collate(data):
     pred_traj_rel = torch.cat(pred_seq_rel_list, dim=0).permute(2, 0, 1)
     non_linear_ped = torch.cat(non_linear_ped_list)
     loss_mask = torch.cat(loss_mask_list, dim=0)
-    ped_speed = torch.cat(ped_speed, dim=0)
+    obs_ped_speed = torch.cat(obs_ped_speed, dim=0)
+    pred_ped_speed = torch.cat(pred_ped_speed, dim=0)
     seq_start_end = torch.LongTensor(seq_start_end)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, non_linear_ped,
-        loss_mask, seq_start_end, ped_speed
+        loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed
     ]
 
     return tuple(out)
@@ -254,7 +255,9 @@ class TrajectoryDataset(Dataset):
             seq_list_rel[:, :, self.obs_len:]).type(torch.float)
         self.loss_mask = torch.from_numpy(loss_mask_list).type(torch.float)
         self.non_linear_ped = torch.from_numpy(non_linear_ped).type(torch.float)
-        self.ped_speed = torch.from_numpy(ped_speed).type(torch.float)
+        self.obs_ped_speed = torch.from_numpy(
+            ped_speed[:, :self.obs_len]).type(torch.float)
+        self.pred_ped_speed = torch.from_numpy(ped_speed[:, self.obs_len:]).type(torch.float)
         cum_start_idx = [0] + np.cumsum(num_peds_in_seq).tolist()
         self.seq_start_end = [
             (start, end)
@@ -270,6 +273,6 @@ class TrajectoryDataset(Dataset):
             self.obs_traj[start:end, :], self.pred_traj[start:end, :],
             self.obs_traj_rel[start:end, :], self.pred_traj_rel[start:end, :],
             self.non_linear_ped[start:end], self.loss_mask[start:end, :],
-            self.ped_speed[start:end, :]
+            self.obs_ped_speed[start:end, :], self.pred_ped_speed[start:end, :]
         ]
         return out

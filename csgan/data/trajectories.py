@@ -101,6 +101,9 @@ def get_speed_labels(num_sequences, frame_data, seq_len, frames):
                 ped_speed.append([a, ped_id, b])
     ped_speed = np.asarray(ped_speed)
     km = KMeans(5)
+    #clusters = DBSCAN(eps=0.03, min_samples=200, metric='manhattan').fit_predict(ped_speed[:, 2].reshape(-1, 1))
+    #clusterer = hdbscan.HDBSCAN(min_cluster_size=150)
+    #clusters = clusterer.fit_predict(ped_speed[:, 2].reshape(-1, 1))
     clusters = km.fit_predict(ped_speed[:, 2].reshape(-1, 1))
 
     # Annotating the labels using python scripts

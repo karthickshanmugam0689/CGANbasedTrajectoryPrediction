@@ -41,7 +41,7 @@ class Encoder(nn.Module):
             embedding_dim, h_dim, num_layers, dropout=dropout
         )
 
-        self.spatial_embedding = nn.Linear(3, embedding_dim)
+        self.spatial_embedding = nn.Linear(2, embedding_dim)
 
     def init_hidden(self, batch):
         return (
@@ -49,10 +49,10 @@ class Encoder(nn.Module):
             torch.zeros(self.num_layers, batch, self.h_dim)
         )
 
-    def forward(self, obs_traj, obs_ped_speed):
+    def forward(self, obs_traj):
         batch = obs_traj.size(1)
-        obs_traj_speed = torch.cat([obs_traj, obs_ped_speed], dim=2)
-        obs_traj_embedding = self.spatial_embedding(obs_traj_speed.contiguous().view(-1, 3))
+        #obs_traj_speed = torch.cat([obs_traj, obs_ped_speed], dim=2)
+        obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
         obs_traj_embedding = obs_traj_embedding.view(-1, batch, self.embedding_dim)
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
@@ -99,20 +99,31 @@ class Decoder(nn.Module):
                 dropout=dropout
             )
 
-        self.spatial_embedding_with_speed = nn.Linear(3, embedding_dim)
+        self.spatial_embedding_with_speed = nn.Linear(128, embedding_dim)
         self.spatial_embedding = nn.Linear(2, embedding_dim)
         self.hidden2pos = nn.Linear(h_dim, 2)
 
     def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, last_speed_pos):
         batch = last_pos.size(0)
         pred_traj_fake_rel = []
-        decoder_input = self.spatial_embedding_with_speed(torch.cat([last_pos_rel, last_speed_pos], dim=1))
+        last_pos_embedding = self.spatial_embedding(last_pos_rel)
+        decoder_input = torch.cat([last_pos_embedding, last_speed_pos], dim=1)
+        decoder_input = self.spatial_embedding_with_speed(decoder_input)
         decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
         for _ in range(self.seq_len):
             output, state_tuple = self.decoder(decoder_input, state_tuple)
             rel_pos = self.hidden2pos(output.view(-1, self.h_dim))
             curr_pos = rel_pos + last_pos
+
+            # if self.pool_every_timestep:
+            #     decoder_h = state_tuple[0]
+            #     pool_h = self.pool_net(decoder_h, seq_start_end, curr_pos, obs_ped_speed)
+            #     decoder_h = torch.cat(
+            #         [decoder_h.view(-1, self.h_dim), pool_h], dim=1)
+            #     decoder_h = self.mlp(decoder_h)
+            #     decoder_h = torch.unsqueeze(decoder_h, 0)
+            #     state_tuple = (decoder_h, state_tuple[1])
 
             embedding_input = rel_pos
 
@@ -127,21 +138,21 @@ class Decoder(nn.Module):
 
 class PoolHiddenNet(nn.Module):
     def __init__(
-            self, embedding_dim=64, h_dim=64, mlp_dim=1024, bottleneck_dim=1024,
+            self, embedding_dim_pooling=128, h_dim=64, mlp_dim=1024, bottleneck_dim=1024,
             activation='relu', batch_norm=True, dropout=0.0
     ):
         super(PoolHiddenNet, self).__init__()
 
         self.mlp_dim = 1024
-        self.h_dim = h_dim
+        self.h_dim = 128
         self.bottleneck_dim = bottleneck_dim
-        self.embedding_dim = embedding_dim
+        self.embedding_dim_pooling = 128
 
-        mlp_pre_dim = embedding_dim + h_dim + h_dim  # concatenating_speed_dimension
+        mlp_pre_dim = embedding_dim_pooling + embedding_dim_pooling + embedding_dim_pooling  # concatenating_speed_dimension
         mlp_pre_pool_dims = [mlp_pre_dim, 512, bottleneck_dim]
 
-        self.spatial_embedding = nn.Linear(2, embedding_dim)
-        self.speed_embedding = nn.Linear(1, embedding_dim)
+        self.spatial_embedding = nn.Linear(2, embedding_dim_pooling)
+        self.speed_embedding = nn.Linear(64, embedding_dim_pooling)
         self.mlp_pre_pool = make_mlp(
             mlp_pre_pool_dims,
             activation=activation,
@@ -188,7 +199,7 @@ class TrajectoryGenerator(nn.Module):
             decoder_h_dim=128, mlp_dim=1024, num_layers=1, noise_dim=(0,),
             noise_type='gaussian', noise_mix_type='ped', pooling_type=None,
             pool_every_timestep=True, dropout=0.0, bottleneck_dim=1024,
-            activation='relu', batch_norm=True, neighborhood_size=2.0, grid_size=8, skip=1
+            activation='relu', batch_norm=True, neighborhood_size=2.0, grid_size=8, skip=1, embedding_dim_pooling=128
     ):
         super(TrajectoryGenerator, self).__init__()
 
@@ -211,6 +222,8 @@ class TrajectoryGenerator(nn.Module):
         self.bottleneck_dim = 1024
         self.skip = skip
         self.speed_embedding_sigmoid_layer = nn.Sigmoid()
+        self.speed_embedding_layer = nn.Linear(8, 64)
+        self.embedding_dim_pooling = embedding_dim_pooling
 
         self.encoder = Encoder(
             embedding_dim=embedding_dim,
@@ -238,7 +251,7 @@ class TrajectoryGenerator(nn.Module):
 
         if pooling_type == 'pool_net':
             self.pool_net = PoolHiddenNet(
-                embedding_dim=self.embedding_dim,
+                embedding_dim_pooling=self.embedding_dim_pooling,
                 h_dim=encoder_h_dim,
                 mlp_dim=mlp_dim,
                 bottleneck_dim=bottleneck_dim,
@@ -310,15 +323,18 @@ class TrajectoryGenerator(nn.Module):
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, user_noise=None):
         batch = obs_traj_rel.size(1)
         obs_ped_speed = self.speed_embedding_sigmoid_layer(obs_ped_speed)
-        obs_ped_speed = obs_ped_speed.unsqueeze(dim=2)
-        obs_ped_speed = obs_ped_speed.permute(1, 0, 2)
+        obs_ped_speed_embedding = self.speed_embedding_layer(obs_ped_speed)
+        obs_ped_speed = obs_ped_speed_embedding.unsqueeze(dim=2)
+        obs_ped_speed = obs_ped_speed.permute(2, 1, 0)
+        obs_ped_speed = obs_ped_speed.permute(0, 2, 1)
         # Encode seq
-        final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
+        final_encoder_h = self.encoder(obs_traj_rel)
+        final_encoder_h_with_speed_embedding = torch.cat([final_encoder_h, obs_ped_speed], dim=2)
         # Pool States
         if self.pooling_type:
             end_pos = obs_traj[-1, :, :]
             end_speed_pos = obs_ped_speed[-1, :, :]
-            pool_h = self.pool_net(final_encoder_h, seq_start_end, end_pos, end_speed_pos)
+            pool_h = self.pool_net(final_encoder_h_with_speed_embedding, seq_start_end, end_pos, end_speed_pos)
             # Construct input hidden states for decoder
             mlp_decoder_context_input = torch.cat(
                 [final_encoder_h.view(-1, self.encoder_h_dim), pool_h], dim=1)

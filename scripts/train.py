@@ -56,6 +56,7 @@ parser.add_argument('--noise_mix_type', default='ped')
 parser.add_argument('--clipping_threshold_g', default=0, type=float)
 parser.add_argument('--g_learning_rate', default=5e-4, type=float)
 parser.add_argument('--g_steps', default=1, type=int)
+parser.add_argument('--embedding_dim_pool', default=128, type=int)
 
 # Pooling Options
 parser.add_argument('--pooling_type', default='pool_net')
@@ -109,61 +110,11 @@ def get_dtypes(args):
     return long_dtype, float_dtype
 
 
-def get_mock_seq_array(obs_len, pred_len):
-    seq_len = obs_len + pred_len
-    array_of_seq_len = []
-    for i in range(seq_len):
-        array_of_seq_len.append(i)
-    return array_of_seq_len
-
-
-def get_possible_skip_conditions(array_of_seq_len):
-    no_of_possible_conditions = []
-    for idx, x in enumerate(range(len(array_of_seq_len), 2, -1)):
-        skip = array_of_seq_len[0:len(array_of_seq_len):x]
-        splitting_array_into_two = np.array_split(skip, 2)
-        obs_len_size, = splitting_array_into_two[0].shape
-        pred_len_size, = splitting_array_into_two[1].shape
-        if obs_len_size >= 2 and pred_len_size == 2:
-            no_of_possible_conditions.append(x)
-            break
-        else:
-            continue
-    return no_of_possible_conditions
-
-
-def convert_continuous_speed_to_discrete(no_of_possible_conditions, speed):
-    if speed == 0:
-        index = 0
-    else:
-        number_line_split = np.linspace(0, 1, no_of_possible_conditions[-1] + 1).tolist()
-        index = bisect.bisect_right(number_line_split, speed)
-    return index
-
-
-def get_skipped_obs_pred_len_size(array_of_seq_len, user_speed_condition, obs_len, pred_len):
-    seq_len = array_of_seq_len[0: len(array_of_seq_len): user_speed_condition + 1]
-    print(seq_len)
-    if len(seq_len) % 2 == 0:
-        obs_len = len(seq_len) / 2
-        pred_len = len(seq_len) / 2
-    elif obs_len > pred_len:
-        obs_len = len(np.array_split(seq_len, 2)[0])
-        pred_len = len(np.array_split(seq_len, 2)[1])
-    elif obs_len < pred_len:
-        pred_len = len(np.array_split(seq_len, 2)[0])
-        obs_len = len(np.array_split(seq_len, 2)[1])
-    else:
-        obs_len = len(np.array_split(seq_len, 2)[0])
-        pred_len = len(np.array_split(seq_len, 2)[1])
-    return int(obs_len), int(pred_len)
-
-
 def main(args):
 
     train_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/train"
     val_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/val"
-    # long_dtype, float_dtype = get_dtypes(args)
+    long_dtype, float_dtype = get_dtypes(args)
     # print(torch.cuda.is_available())
     logger.info("Initializing train dataset")
     train_dset, train_loader = data_loader(args, train_path)
@@ -182,6 +133,7 @@ def main(args):
         obs_len=args.obs_len,
         pred_len=args.pred_len,
         embedding_dim=args.embedding_dim,
+        embedding_dim_pooling=args.embedding_dim_pool,
         encoder_h_dim=args.encoder_h_dim_g,
         decoder_h_dim=args.decoder_h_dim_g,
         mlp_dim=args.mlp_dim,

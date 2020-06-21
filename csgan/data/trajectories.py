@@ -180,8 +180,8 @@ class TrajectoryDataset(Dataset):
             for frame in frames:
                 frame_data.append(data[frame == data[:, 0], :])
             num_sequences = int(math.ceil((len(frames) - self.seq_len + 1) / skip))
-            clusters = get_speed_labels(num_sequences, frame_data, self.seq_len, frames)
-            counter = 0
+            #clusters = get_speed_labels(num_sequences, frame_data, self.seq_len, frames)
+            #counter = 0
             for idx in range(0, num_sequences * self.skip + 1, skip):
                 curr_seq_data = np.concatenate(
                     frame_data[idx:idx + self.seq_len], axis=0)
@@ -207,16 +207,17 @@ class TrajectoryDataset(Dataset):
                     curr_ped_dist = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                     curr_ped_rel_speed = curr_ped_dist / 0.4
-                    clusters[:, 3] = np.array(clusters[:, 3], dtype=np.int8)
+                    curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
+                    #clusters[:, 3] = np.array(clusters[:, 3], dtype=np.int8)
 
-                    frames_from_cluster_data = clusters[counter:counter + self.seq_len, 0]
-                    speed_from_cluster_data = clusters[counter:counter + self.seq_len, 2]
+                    #frames_from_cluster_data = clusters[counter:counter + self.seq_len, 0]
+                    #speed_from_cluster_data = clusters[counter:counter + self.seq_len, 2]
 
-                    if (frames_from_cluster_data == curr_ped_frame_seq).all() and (speed_from_cluster_data == curr_ped_rel_speed).all():
-                        cluster_label_for_ped = clusters[counter:counter+self.seq_len, 3]
-                        cluster_label_for_ped = cluster_label_for_ped.reshape(-1, 1)
-                        cluster_label_transposed = np.transpose(cluster_label_for_ped)
-                    counter += 1
+                    #if (frames_from_cluster_data == curr_ped_frame_seq).all() and (speed_from_cluster_data == curr_ped_rel_speed).all():
+                    #    cluster_label_for_ped = clusters[counter:counter+self.seq_len, 3]
+                    #    cluster_label_for_ped = cluster_label_for_ped.reshape(-1, 1)
+                    #    cluster_label_transposed = np.transpose(cluster_label_for_ped)
+                    #counter += 1
 
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
                     curr_ped_seq = curr_ped_seq
@@ -229,7 +230,7 @@ class TrajectoryDataset(Dataset):
                     # Linear vs Non-Linear Trajectory
                     _non_linear_ped.append(poly_fit(curr_ped_seq, pred_len, threshold))
                     curr_loss_mask[_idx, pad_front:pad_end] = 1
-                    _curr_ped_speed[_idx, pad_front:pad_end] = cluster_label_transposed
+                    _curr_ped_speed[_idx, pad_front:pad_end] = curr_ped_rel_speed
                     num_peds_considered += 1
 
                 if num_peds_considered > min_ped:

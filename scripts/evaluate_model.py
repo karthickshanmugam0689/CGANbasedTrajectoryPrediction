@@ -21,6 +21,7 @@ def get_generator(checkpoint):
         obs_len=args.obs_len,
         pred_len=args.pred_len,
         embedding_dim=args.embedding_dim,
+        embedding_dim_pooling=args.embedding_dim_pool,
         encoder_h_dim=args.encoder_h_dim_g,
         decoder_h_dim=args.decoder_h_dim_g,
         mlp_dim=args.mlp_dim,

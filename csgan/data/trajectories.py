@@ -6,7 +6,7 @@ import numpy as np
 
 import torch
 from torch.utils.data import Dataset
-
+import torch.nn as nn
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
@@ -44,6 +44,8 @@ def seq_collate(data):
 
     return tuple(out)
 
+def sigmoid(x):
+  return 1 / (1 + math.exp(-x))
 
 def read_file(_path, delim='\t'):
     data = []
@@ -200,13 +202,18 @@ class TrajectoryDataset(Dataset):
                     pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
                     if pad_end - pad_front != self.seq_len:
                         continue
-                    curr_ped_x_axis_new = [0.0] + [np.abs(s - t) for s, t in
+                    # for manhattan, change np.square to np.abs
+                    curr_ped_x_axis_new = [0.0] + [np.square(t - s) for s, t in
                                                    zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
-                    curr_ped_y_axis_new = [0.0] + [np.abs(s - t) for s, t in
+                    curr_ped_y_axis_new = [0.0] + [np.square(t - s) for s, t in
                                                    zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
-                    curr_ped_dist = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
+                    #curr_ped_dist = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
+
+                    curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
-                    curr_ped_rel_speed = curr_ped_dist / 0.4
+                    curr_ped_rel_speed_a = curr_ped_dist / 0.4
+                    curr_ped_rel_speed = [sigmoid(x) if x != 0 else 0 for x in curr_ped_rel_speed_a]
+                    curr_ped_rel_speed = np.around(curr_ped_rel_speed, decimals=4)
                     curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
                     #clusters[:, 3] = np.array(clusters[:, 3], dtype=np.int8)
 
@@ -247,6 +254,8 @@ class TrajectoryDataset(Dataset):
         loss_mask_list = np.concatenate(loss_mask_list, axis=0)
         non_linear_ped = np.asarray(non_linear_ped)
         ped_speed = np.concatenate(ped_speed, axis=0)
+        ped_speed = torch.from_numpy(ped_speed).type(torch.float)
+#        ped_speed = sigmoid_function(ped_speed)
 
         # Convert numpy -> Torch Tensor
         self.obs_traj = torch.from_numpy(
@@ -259,9 +268,8 @@ class TrajectoryDataset(Dataset):
             seq_list_rel[:, :, self.obs_len:]).type(torch.float)
         self.loss_mask = torch.from_numpy(loss_mask_list).type(torch.float)
         self.non_linear_ped = torch.from_numpy(non_linear_ped).type(torch.float)
-        self.obs_ped_speed = torch.from_numpy(
-            ped_speed[:, :self.obs_len]).type(torch.float)
-        self.pred_ped_speed = torch.from_numpy(ped_speed[:, self.obs_len:]).type(torch.float)
+        self.obs_ped_speed = ped_speed[:, :self.obs_len]
+        self.pred_ped_speed = ped_speed[:, self.obs_len:]
         cum_start_idx = [0] + np.cumsum(num_peds_in_seq).tolist()
         self.seq_start_end = [
             (start, end)

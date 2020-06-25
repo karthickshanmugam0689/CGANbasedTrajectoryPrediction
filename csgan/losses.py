@@ -80,7 +80,7 @@ def displacement_error(pred_traj, pred_traj_gt, consider_ped=None, mode='sum'):
     - consider_ped: Tensor of shape (batch)
     - mode: Can be one of sum, raw
     Output:
-    - loss: gives the eculidian displacement error
+    - loss: gives the euclidian displacement error
     """
     seq_len, _, _ = pred_traj.size()
     loss = pred_traj_gt.permute(1, 0, 2) - pred_traj.permute(1, 0, 2)

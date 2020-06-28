@@ -34,8 +34,8 @@ def seq_collate(data):
     pred_traj_rel = torch.cat(pred_seq_rel_list, dim=0).permute(2, 0, 1)
     non_linear_ped = torch.cat(non_linear_ped_list)
     loss_mask = torch.cat(loss_mask_list, dim=0)
-    obs_ped_speed = torch.cat(obs_ped_speed, dim=0)
-    pred_ped_speed = torch.cat(pred_ped_speed, dim=0)
+    obs_ped_speed = torch.cat(obs_ped_speed, dim=0).permute(2, 0, 1)
+    pred_ped_speed = torch.cat(pred_ped_speed, dim=0).permute(2, 0, 1)
     seq_start_end = torch.LongTensor(seq_start_end)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, non_linear_ped,
@@ -175,6 +175,7 @@ class TrajectoryDataset(Dataset):
         loss_mask_list = []
         non_linear_ped = []
         ped_speed = []
+        ped_dist = []
         for path in all_files:
             data = read_file(path, delim)
             frames = np.unique(data[:, 0]).tolist()
@@ -212,7 +213,7 @@ class TrajectoryDataset(Dataset):
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                     curr_ped_rel_speed_a = curr_ped_dist / 0.4
-                    curr_ped_rel_speed = [sigmoid(x) if x != 0 else 0 for x in curr_ped_rel_speed_a]
+                    curr_ped_rel_speed = [sigmoid(x) if x > 0 else 0 for x in curr_ped_rel_speed_a]
                     curr_ped_rel_speed = np.around(curr_ped_rel_speed, decimals=4)
                     curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
                     #clusters[:, 3] = np.array(clusters[:, 3], dtype=np.int8)
@@ -269,7 +270,9 @@ class TrajectoryDataset(Dataset):
         self.loss_mask = torch.from_numpy(loss_mask_list).type(torch.float)
         self.non_linear_ped = torch.from_numpy(non_linear_ped).type(torch.float)
         self.obs_ped_speed = ped_speed[:, :self.obs_len]
+        self.obs_ped_speed = self.obs_ped_speed.unsqueeze(dim=1)
         self.pred_ped_speed = ped_speed[:, self.obs_len:]
+        self.pred_ped_speed = self.pred_ped_speed.unsqueeze(dim=1)
         cum_start_idx = [0] + np.cumsum(num_peds_in_seq).tolist()
         self.seq_start_end = [
             (start, end)

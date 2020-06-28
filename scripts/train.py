@@ -369,21 +369,19 @@ def discriminator_step(
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
 
-    generator_out, pred_speed_fake = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
+    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
-    pred_speed_fake = pred_speed_fake.squeeze(dim=2)
-    pred_speed_fake = pred_speed_fake.permute(1, 0)
+
     traj_real = torch.cat([obs_traj, pred_traj_gt], dim=0)
     traj_real_rel = torch.cat([obs_traj_rel, pred_traj_gt_rel], dim=0)
     traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
     traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
-    ped_speed_real = torch.cat([obs_ped_speed, pred_ped_speed], dim=1)
-    ped_speed_fake = torch.cat([obs_ped_speed, pred_speed_fake], dim= 1)
+    ped_speed = torch.cat([obs_ped_speed, pred_ped_speed], dim=0)
 
-    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed_fake, seq_start_end)
-    scores_real = discriminator(traj_real, traj_real_rel, ped_speed_real, seq_start_end)
+    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
+    scores_real = discriminator(traj_real, traj_real_rel, ped_speed, seq_start_end)
 
     # Compute loss with optional gradient penalty
     data_loss = d_loss_fn(scores_real, scores_fake)
@@ -414,11 +412,10 @@ def generator_step(
     loss_mask = loss_mask[:, args.obs_len:]
 
     for _ in range(args.best_k):
-        generator_out, pred_speed_fake = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
+        generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
+
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
-        pred_speed_fake = pred_speed_fake.squeeze(dim=2)
-        pred_speed_fake = pred_speed_fake.permute(1, 0)
 
         if args.l2_loss_weight > 0:
             g_l2_loss_rel.append(args.l2_loss_weight * l2_loss(
@@ -441,10 +438,9 @@ def generator_step(
 
     traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
     traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
-    ped_speed_real = torch.cat([obs_ped_speed, pred_ped_speed], dim=1)
-    ped_speed_fake = torch.cat([obs_ped_speed, pred_speed_fake], dim= 1)
+    ped_speed = torch.cat([obs_ped_speed, pred_ped_speed], dim=0)
 
-    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed_fake, seq_start_end)
+    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
     discriminator_loss = g_loss_fn(scores_fake)
 
     loss += discriminator_loss
@@ -481,12 +477,10 @@ def check_accuracy(
             linear_ped = 1 - non_linear_ped
             loss_mask = loss_mask[:, args.obs_len:]
 
-            pred_traj_fake_rel, pred_speed_fake = generator(
+            pred_traj_fake_rel = generator(
                 obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed
             )
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
-            pred_speed_fake = pred_speed_fake.squeeze(dim=2)
-            pred_speed_fake = pred_speed_fake.permute(1, 0)
 
             g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(
                 pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
@@ -504,11 +498,10 @@ def check_accuracy(
             traj_real_rel = torch.cat([obs_traj_rel, pred_traj_gt_rel], dim=0)
             traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
             traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
-            ped_speed_real = torch.cat([obs_ped_speed, pred_ped_speed], dim=1)
-            ped_speed_fake = torch.cat([obs_ped_speed, pred_speed_fake], dim=1)
+            ped_speed = torch.cat([obs_ped_speed, pred_ped_speed], dim=0)
 
-            scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed_fake, seq_start_end)
-            scores_real = discriminator(traj_real, traj_real_rel, ped_speed_real, seq_start_end)
+            scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
+            scores_real = discriminator(traj_real, traj_real_rel, ped_speed, seq_start_end)
 
             d_loss = d_loss_fn(scores_real, scores_fake)
             d_losses.append(d_loss.item())

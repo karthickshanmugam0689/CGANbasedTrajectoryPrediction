@@ -123,6 +123,7 @@ class Decoder(nn.Module):
         self.spatial_traj_embedding = nn.Linear(2, embedding_dim)
         self.spatial_speed_embedding = nn.Linear(1, embedding_dim)
         self.hidden2pos = nn.Linear(h_dim, 2)
+        self.spatial_embedding = nn.Linear(2, embedding_dim)
 
     def forward(self, last_pos, last_pos_rel, state_tuple, last_speed_pos_rel, last_speed_abs_pos):
         batch = last_pos.size(0)
@@ -135,21 +136,15 @@ class Decoder(nn.Module):
             output_traj, state_tuple_traj = self.decoder(decoder_input, state_tuple)
             rel_pos = self.hidden2pos(output_traj.view(-1, self.h_dim))
             curr_pos = rel_pos + last_pos
-            embedding_traj_input = rel_pos
-            curr_abs_speed = calc_abs_speed(curr_pos, last_pos)
-            curr_rel_speed = calc_rel_speed(curr_abs_speed, last_speed_abs_pos)
 
             decoder_input = torch.cat([embedding_traj_input, curr_rel_speed], dim=1)
             decoder_input = self.traj_speed_embedding(decoder_input)
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
             last_pos = curr_pos
-            last_speed_abs_pos = curr_abs_speed
-
 
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
         return pred_traj_fake_rel, state_tuple[0]
-
 
 class PoolHiddenNet(nn.Module):
     def __init__(
@@ -380,9 +375,7 @@ class TrajectoryGenerator(nn.Module):
         decoder_out = self.decoder(
             last_pos,
             last_pos_rel,
-            state_tuple,
-            last_speed_pos_rel,
-            last_speed_abs_pos
+            state_tuple
         )
         pred_traj_fake_rel, final_decoder_h = decoder_out
 
@@ -406,8 +399,8 @@ class EncoderDiscriminator(nn.Module):
 
     def init_hidden(self, batch):
         return (
-            torch.zeros(self.num_layers, batch, self.h_dim).cuda(),
-            torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+            torch.zeros(self.num_layers, batch, self.h_dim),
+            torch.zeros(self.num_layers, batch, self.h_dim)
         )
 
     def forward(self, obs_traj):

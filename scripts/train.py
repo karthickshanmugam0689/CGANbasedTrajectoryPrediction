@@ -147,7 +147,7 @@ def main(args):
         batch_norm=args.batch_norm)
 
     generator.apply(init_weights)
-    generator.type(torch.FloatTensor).train()
+    generator.type(torch.cuda.FloatTensor).train()
     logger.info('Here is the generator:')
     logger.info(generator)
 
@@ -163,7 +163,7 @@ def main(args):
         d_type=args.d_type)
 
     discriminator.apply(init_weights)
-    discriminator.type(torch.FloatTensor).train()
+    discriminator.type(torch.cuda.FloatTensor).train()
     logger.info('Here is the discriminator:')
     logger.info(discriminator)
 

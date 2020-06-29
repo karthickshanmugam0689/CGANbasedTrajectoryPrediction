@@ -122,23 +122,23 @@ class Decoder(nn.Module):
         self.traj_speed_embedding = nn.Linear(3, embedding_dim)
         self.spatial_traj_embedding = nn.Linear(2, embedding_dim)
         self.spatial_speed_embedding = nn.Linear(1, embedding_dim)
-        self.hidden2pos = nn.Linear(h_dim, 2)
         self.spatial_embedding = nn.Linear(2, embedding_dim)
+        self.hidden2pos = nn.Linear(h_dim, 2)
 
-    def forward(self, last_pos, last_pos_rel, state_tuple, last_speed_pos_rel, last_speed_abs_pos):
+    def forward(self, last_pos, last_pos_rel, state_tuple):
         batch = last_pos.size(0)
         pred_traj_fake_rel = []
-        last_pos_with_speed = torch.cat([last_pos_rel, last_speed_pos_rel], dim=1)
-        decoder_input = self.traj_speed_embedding(last_pos_with_speed)
+        decoder_input = self.spatial_embedding(last_pos_rel)
         decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
         for _ in range(self.seq_len):
-            output_traj, state_tuple_traj = self.decoder(decoder_input, state_tuple)
-            rel_pos = self.hidden2pos(output_traj.view(-1, self.h_dim))
+            output, state_tuple = self.decoder(decoder_input, state_tuple)
+            rel_pos = self.hidden2pos(output.view(-1, self.h_dim))
             curr_pos = rel_pos + last_pos
 
-            decoder_input = torch.cat([embedding_traj_input, curr_rel_speed], dim=1)
-            decoder_input = self.traj_speed_embedding(decoder_input)
+            embedding_input = rel_pos
+
+            decoder_input = self.spatial_embedding(embedding_input)
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
             last_pos = curr_pos
@@ -348,7 +348,7 @@ class TrajectoryGenerator(nn.Module):
             end_pos = obs_traj[-1, :, :]
             end_speed_pos = obs_ped_speed[-1, :, :]
             pool_h = self.pool_net(final_encoder_h, seq_start_end, end_pos, end_speed_pos)
-            # concatenating pooling moddule output with encoder output and speed embedding
+            # concatenating pooling module output with encoder output and speed embedding
             mlp_decoder_context_input = torch.cat(
                 [final_encoder_h.view(-1, self.encoder_h_dim), pool_h, obs_ped_speed_embedding.view(-1, self.encoder_h_dim)], dim=1)
         else:

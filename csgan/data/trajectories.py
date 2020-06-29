@@ -148,18 +148,6 @@ class TrajectoryDataset(Dataset):
         self, data_dir, obs_len=8, pred_len=12, skip=1, threshold=0.002,
         min_ped=1, delim='\t'
     ):
-        """
-        Args:
-        - data_dir: Directory containing dataset files in the format
-        <frame_id> <ped_id> <x> <y>
-        - obs_len: Number of time-steps in input trajectories
-        - pred_len: Number of time-steps in output trajectories
-        - skip: Number of frames to skip while making the dataset
-        - threshold: Minimum error to be considered for non linear traj
-        when using a linear predictor
-        - min_ped: Minimum number of pedestrians that should be in a seqeunce
-        - delim: Delimiter in the dataset files
-        """
         super(TrajectoryDataset, self).__init__()
 
         self.data_dir = data_dir
@@ -178,7 +166,6 @@ class TrajectoryDataset(Dataset):
         non_linear_ped = []
         ped_abs_speed = []
         ped_rel_speed = []
-        ped_dist = []
         for path in all_files:
             data = read_file(path, delim)
             frames = np.unique(data[:, 0]).tolist()
@@ -213,7 +200,6 @@ class TrajectoryDataset(Dataset):
                                                    zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
                     curr_ped_y_axis_new = [0.0] + [np.square(t - s) for s, t in
                                                    zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
-                    #curr_ped_dist = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
 
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
@@ -222,7 +208,6 @@ class TrajectoryDataset(Dataset):
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
 
                     curr_ped_abs_speed = curr_ped_abs_speed.reshape(-1, 1)
-                    curr_ped_rel_speed = np.zeros(curr_ped_abs_speed.shape)
                     curr_ped_rel_speed = [0.0] + [(t - s) for s, t in zip(curr_ped_abs_speed[:, 0], curr_ped_abs_speed[1:, 0])]
                     curr_ped_rel_speed = np.around(curr_ped_rel_speed, decimals=4)
 
@@ -232,16 +217,6 @@ class TrajectoryDataset(Dataset):
                     curr_ped_sigmoid_dist = [sigmoid(x) if x > 0 else 0 for x in curr_ped_dist]
                     curr_ped_dist = np.around(curr_ped_sigmoid_dist, decimals=4)
                     curr_ped_dist = np.transpose(curr_ped_dist)
-                    #clusters[:, 3] = np.array(clusters[:, 3], dtype=np.int8)
-
-                    #frames_from_cluster_data = clusters[counter:counter + self.seq_len, 0]
-                    #speed_from_cluster_data = clusters[counter:counter + self.seq_len, 2]
-
-                    #if (frames_from_cluster_data == curr_ped_frame_seq).all() and (speed_from_cluster_data == curr_ped_rel_speed).all():
-                    #    cluster_label_for_ped = clusters[counter:counter+self.seq_len, 3]
-                    #    cluster_label_for_ped = cluster_label_for_ped.reshape(-1, 1)
-                    #    cluster_label_transposed = np.transpose(cluster_label_for_ped)
-                    #counter += 1
 
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
                     curr_ped_seq = curr_ped_seq

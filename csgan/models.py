@@ -48,15 +48,13 @@ class Encoder(nn.Module):
 
     def init_hidden(self, batch):
         return (
-            torch.zeros(self.num_layers, batch, self.h_dim),
-            torch.zeros(self.num_layers, batch, self.h_dim)
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda(),
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda()
         )
 
     def forward(self, obs_traj):
         batch = obs_traj.size(1)
-        #obs_traj_speed = torch.cat([obs_traj, obs_ped_speed], dim=2)
         obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
-        #obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
         obs_traj_embedding = obs_traj_embedding.view(-1, batch, self.embedding_dim)
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
@@ -110,9 +108,8 @@ class Decoder(nn.Module):
         self.spatial_traj_embedding = nn.Linear(2, embedding_dim)
         self.spatial_speed_embedding = nn.Linear(1, embedding_dim)
         self.hidden2pos = nn.Linear(h_dim, 2)
-        self.hiddenSpeed = nn.Linear(h_dim, 1)
 
-    def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, last_speed_pos, last_speed_pos_rel):
+    def forward(self, last_pos, last_pos_rel, state_tuple, last_speed_pos_rel):
         distance_metric = nn.PairwiseDistance(p=2)
         batch = last_pos.size(0)
         pred_traj_fake_rel = []
@@ -125,9 +122,8 @@ class Decoder(nn.Module):
             rel_pos = self.hidden2pos(output_traj.view(-1, self.h_dim))
             curr_pos = rel_pos + last_pos
             embedding_traj_input = rel_pos
-            curr_ped_dist = distance_metric(curr_pos, last_pos)
-            abs_speed = curr_ped_dist / 0.4
-            abs_speed = np.array([sigmoid(x) if x > 0 else 0 for x in abs_speed])
+            curr_ped_dist = distance_metric(curr_pos, last_pos) / 0.4
+            abs_speed = np.array([sigmoid(x) if x > 0 else 0 for x in curr_ped_dist])
             abs_speed = abs_speed.reshape(-1, 1)
             rel_speed = [0.0] + [(t - s) for s, t in zip(abs_speed[:, 0], abs_speed[1:, 0])]
             rel_speed = np.around(rel_speed, decimals=4)
@@ -156,7 +152,6 @@ class PoolHiddenNet(nn.Module):
         self.embedding_dim_pooling = 64
 
         mlp_pre_dim = embedding_dim_pooling + embedding_dim_pooling + embedding_dim_pooling  # concatenating_speed_dimension
-        #mlp_pre_dim = embedding_dim_pooling + embedding_dim_pooling  # concatenating_speed_dimension
         mlp_pre_pool_dims = [mlp_pre_dim, 512, bottleneck_dim]
 
         self.spatial_embedding = nn.Linear(2, embedding_dim_pooling)
@@ -184,16 +179,12 @@ class PoolHiddenNet(nn.Module):
             curr_ped_speed = end_pos_speed[start:end]
             curr_ped_speed_1 = curr_ped_speed.repeat(num_ped, 1)
             curr_end_pos = end_pos[start:end]
-            # Repeat -> H1, H2, H1, H2
-            # Repeat position -> P1, P2, P1, P2
             curr_end_pos_1 = curr_end_pos.repeat(num_ped, 1)
-            # Repeat position -> P1, P1, P2, P2
             curr_end_pos_2 = self.repeat(curr_end_pos, num_ped)
             curr_rel_pos = curr_end_pos_1 - curr_end_pos_2
             curr_rel_embedding = self.spatial_embedding(curr_rel_pos)
             curr_ped_speed_embedding = self.speed_embedding(curr_ped_speed_1)
             mlp_h_input = torch.cat([curr_rel_embedding, curr_hidden_1, curr_ped_speed_embedding], dim=1)
-            #mlp_h_input = torch.cat([curr_rel_embedding, curr_hidden_1], dim=1)
             curr_pool_h = self.mlp_pre_pool(mlp_h_input)
             curr_pool_h = curr_pool_h.view(num_ped, num_ped, -1).max(1)[0]
             pool_h.append(curr_pool_h)
@@ -300,8 +291,6 @@ class TrajectoryGenerator(nn.Module):
                 dropout=dropout
             )
 
-        self.encoder_embedding = nn.Linear(64, decoder_h_dim)
-
     def add_noise(self, _input, seq_start_end, user_noise=None):
         if not self.noise_dim:
             return _input
@@ -342,9 +331,7 @@ class TrajectoryGenerator(nn.Module):
 
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, obs_ped_rel_speed, user_noise=None):
         batch = obs_traj_rel.size(1)
-        ped_rel_speed = obs_ped_rel_speed
-        ped_speed = ped_rel_speed.squeeze(dim=2)
-        ped_speed = ped_speed.permute(1, 0)
+        ped_speed = obs_ped_rel_speed.squeeze(dim=2).permute(1, 0)
         obs_ped_speed_embedding = self.speed_embedding_layer(ped_speed)
         obs_ped_speed_embedding = obs_ped_speed_embedding.unsqueeze(dim=0)
         # Encode seq
@@ -354,7 +341,7 @@ class TrajectoryGenerator(nn.Module):
             end_pos = obs_traj[-1, :, :]
             end_speed_pos = obs_ped_speed[-1, :, :]
             pool_h = self.pool_net(final_encoder_h, seq_start_end, end_pos, end_speed_pos)
-            # Construct input hidden states for decoder
+            # concatenating pooling moddule output with encoder output and speed embedding
             mlp_decoder_context_input = torch.cat(
                 [final_encoder_h.view(-1, self.encoder_h_dim), pool_h, obs_ped_speed_embedding.view(-1, self.encoder_h_dim)], dim=1)
         else:
@@ -369,13 +356,11 @@ class TrajectoryGenerator(nn.Module):
         decoder_h = self.add_noise(noise_input, seq_start_end, user_noise=user_noise)
         decoder_h = torch.unsqueeze(decoder_h, 0)
 
-        decoder_c = torch.zeros(self.num_layers, batch, self.decoder_h_dim)\
-         #   .cuda()
+        decoder_c = torch.zeros(self.num_layers, batch, self.decoder_h_dim).cuda()
 
         state_tuple = (decoder_h, decoder_c)
         last_pos = obs_traj[-1]
         last_pos_rel = obs_traj_rel[-1]
-        last_speed_pos = obs_ped_speed[-1]
         last_speed_pos_rel = obs_ped_rel_speed[-1]
         # Predict Trajectory
 
@@ -383,8 +368,6 @@ class TrajectoryGenerator(nn.Module):
             last_pos,
             last_pos_rel,
             state_tuple,
-            seq_start_end,
-            last_speed_pos,
             last_speed_pos_rel
         )
         pred_traj_fake_rel, final_decoder_h = decoder_out
@@ -407,10 +390,10 @@ class EncoderDiscriminator(nn.Module):
         self.encoder = nn.LSTM(embedding_dim, h_dim, num_layers, dropout=dropout)
         self.spatial_embedding = nn.Linear(3, embedding_dim)
 
-    def init_hidden(self, batch):  # This is where we'll initialise our hidden state as
+    def init_hidden(self, batch):
         return (
-            torch.zeros(self.num_layers, batch, self.h_dim),
-            torch.zeros(self.num_layers, batch, self.h_dim)
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda(),
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda()
         )
 
     def forward(self, obs_traj):

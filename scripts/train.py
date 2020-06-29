@@ -8,7 +8,6 @@ from collections import defaultdict
 
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.optim as optim
 
 from csgan.data.loader import data_loader
@@ -114,7 +113,6 @@ def main(args):
     train_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/train"
     val_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/val"
     long_dtype, float_dtype = get_dtypes(args)
-    # print(torch.cuda.is_available())
     logger.info("Initializing train dataset")
     train_dset, train_loader = data_loader(args, train_path)
     logger.info("Initializing val dataset")
@@ -233,7 +231,7 @@ def main(args):
         logger.info('Starting epoch {}'.format(epoch))
         for batch in train_loader:
             if args.timing == 1:
-                # torch.cuda.synchronize()
+                torch.cuda.synchronize()
                 t1 = time.time()
 
             # Decide whether to use the batch for stepping on discriminator or
@@ -258,7 +256,7 @@ def main(args):
                 g_steps_left -= 1
 
             if args.timing == 1:
-                # torch.cuda.synchronize()
+                torch.cuda.synchronize()
                 t2 = time.time()
                 logger.info('{} step took {}'.format(step_type, t2 - t1))
 
@@ -363,7 +361,7 @@ def main(args):
 def discriminator_step(
         args, batch, generator, discriminator, d_loss_fn, optimizer_d
 ):
-    batch = [tensor for tensor in batch]
+    batch = [tensor.cuda() for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
      loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
     losses = {}
@@ -402,7 +400,7 @@ def discriminator_step(
 def generator_step(
         args, batch, generator, discriminator, g_loss_fn, optimizer_g
 ):
-    batch = [tensor for tensor in batch]
+    batch = [tensor.cuda() for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
      loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
     losses = {}
@@ -471,7 +469,7 @@ def check_accuracy(
     generator.eval()
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor for tensor in batch]
+            batch = [tensor.cuda() for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
              non_linear_ped, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
             linear_ped = 1 - non_linear_ped

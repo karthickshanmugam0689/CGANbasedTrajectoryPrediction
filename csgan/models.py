@@ -67,13 +67,15 @@ def sigmoid(x):
 def calc_abs_speed(curr_pos, prev_pos):
     distance_metric = nn.PairwiseDistance(p=2)
     curr_abs_speed = distance_metric(curr_pos, prev_pos) / 0.4
+    curr_abs_speed = np.array([sigmoid(x) if x > 0 else 0 for x in curr_abs_speed])
+    curr_abs_speed = np.around(curr_abs_speed, decimals=4)
+    curr_abs_speed = curr_abs_speed.reshape(-1, 1)
+    curr_abs_speed = torch.from_numpy(curr_abs_speed).type(torch.float).cuda()
     return curr_abs_speed
 
 
 def calc_rel_speed(curr_speed, prev_speed):
     rel_speed = curr_speed - prev_speed
-    rel_speed = np.around(rel_speed, decimals=4)
-    rel_speed = torch.from_numpy(rel_speed).type(torch.float).unsqueeze(dim=1)
     return rel_speed
 
 

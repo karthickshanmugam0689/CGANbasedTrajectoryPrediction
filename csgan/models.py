@@ -64,6 +64,19 @@ class Encoder(nn.Module):
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
+def calc_abs_speed(curr_pos, prev_pos):
+    distance_metric = nn.PairwiseDistance(p=2)
+    curr_abs_speed = distance_metric(curr_pos, prev_pos) / 0.4
+    return curr_abs_speed
+
+
+def calc_rel_speed(curr_speed, prev_speed):
+    rel_speed = curr_speed - prev_speed
+    rel_speed = np.around(rel_speed, decimals=4)
+    rel_speed = torch.from_numpy(rel_speed).type(torch.float).unsqueeze(dim=1)
+    return rel_speed
+
+
 class Decoder(nn.Module):
     def __init__(
             self, seq_len, embedding_dim=64, h_dim=128, mlp_dim=1024, num_layers=1,
@@ -109,8 +122,7 @@ class Decoder(nn.Module):
         self.spatial_speed_embedding = nn.Linear(1, embedding_dim)
         self.hidden2pos = nn.Linear(h_dim, 2)
 
-    def forward(self, last_pos, last_pos_rel, state_tuple, last_speed_pos_rel):
-        distance_metric = nn.PairwiseDistance(p=2)
+    def forward(self, last_pos, last_pos_rel, state_tuple, last_speed_pos_rel, last_speed_abs_pos):
         batch = last_pos.size(0)
         pred_traj_fake_rel = []
         last_pos_with_speed = torch.cat([last_pos_rel, last_speed_pos_rel], dim=1)
@@ -122,18 +134,16 @@ class Decoder(nn.Module):
             rel_pos = self.hidden2pos(output_traj.view(-1, self.h_dim))
             curr_pos = rel_pos + last_pos
             embedding_traj_input = rel_pos
-            curr_ped_dist = distance_metric(curr_pos, last_pos) / 0.4
-            abs_speed = np.array([sigmoid(x) if x > 0 else 0 for x in curr_ped_dist])
-            abs_speed = abs_speed.reshape(-1, 1)
-            rel_speed = [0.0] + [(t - s) for s, t in zip(abs_speed[:, 0], abs_speed[1:, 0])]
-            rel_speed = np.around(rel_speed, decimals=4)
-            rel_speed = torch.from_numpy(rel_speed).type(torch.float).unsqueeze(dim=1)
+            curr_abs_speed = calc_abs_speed(curr_pos, last_pos)
+            curr_rel_speed = calc_rel_speed(curr_abs_speed, last_speed_abs_pos)
 
-            decoder_input = torch.cat([embedding_traj_input, rel_speed], dim=1)
+            decoder_input = torch.cat([embedding_traj_input, curr_rel_speed], dim=1)
             decoder_input = self.traj_speed_embedding(decoder_input)
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
             last_pos = curr_pos
+            last_speed_abs_pos = curr_abs_speed
+
 
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
         return pred_traj_fake_rel, state_tuple[0]
@@ -361,6 +371,7 @@ class TrajectoryGenerator(nn.Module):
         state_tuple = (decoder_h, decoder_c)
         last_pos = obs_traj[-1]
         last_pos_rel = obs_traj_rel[-1]
+        last_speed_abs_pos = obs_ped_speed[-1]
         last_speed_pos_rel = obs_ped_rel_speed[-1]
         # Predict Trajectory
 
@@ -368,7 +379,8 @@ class TrajectoryGenerator(nn.Module):
             last_pos,
             last_pos_rel,
             state_tuple,
-            last_speed_pos_rel
+            last_speed_pos_rel,
+            last_speed_abs_pos
         )
         pred_traj_fake_rel, final_decoder_h = decoder_out
 

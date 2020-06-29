@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def seq_collate(data):
     (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list,
-     non_linear_ped_list, loss_mask_list, obs_ped_abs_speed, pred_ped_abs_speed, obs_ped_rel_speed, pred_ped_rel_speed) = zip(*data)
+     non_linear_ped_list, loss_mask_list, obs_ped_abs_speed, pred_ped_abs_speed) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -36,12 +36,10 @@ def seq_collate(data):
     loss_mask = torch.cat(loss_mask_list, dim=0)
     obs_ped_abs_speed = torch.cat(obs_ped_abs_speed, dim=0).permute(2, 0, 1)
     pred_ped_abs_speed = torch.cat(pred_ped_abs_speed, dim=0).permute(2, 0, 1)
-    obs_ped_rel_speed = torch.cat(obs_ped_rel_speed, dim=0).permute(2, 0, 1)
-    pred_ped_rel_speed = torch.cat(pred_ped_rel_speed, dim=0).permute(2, 0, 1)
     seq_start_end = torch.LongTensor(seq_start_end)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, non_linear_ped,
-        loss_mask, seq_start_end, obs_ped_abs_speed, pred_ped_abs_speed, obs_ped_rel_speed, pred_ped_rel_speed
+        loss_mask, seq_start_end, obs_ped_abs_speed, pred_ped_abs_speed
     ]
 
     return tuple(out)
@@ -207,12 +205,12 @@ class TrajectoryDataset(Dataset):
                     curr_ped_abs_speed = [sigmoid(x) if x > 0 else 0 for x in curr_ped_abs_speed_a]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
 
-                    curr_ped_abs_speed = curr_ped_abs_speed.reshape(-1, 1)
-                    curr_ped_rel_speed = [0.0] + [(t - s) for s, t in zip(curr_ped_abs_speed[:, 0], curr_ped_abs_speed[1:, 0])]
-                    curr_ped_rel_speed = np.around(curr_ped_rel_speed, decimals=4)
+#                    curr_ped_abs_speed = curr_ped_abs_speed.reshape(-1, 1)
+#                    curr_ped_rel_speed = [0.0] + [(t - s) for s, t in zip(curr_ped_abs_speed[:, 0], curr_ped_abs_speed[1:, 0])]
+#                    curr_ped_rel_speed = np.around(curr_ped_rel_speed, decimals=4)
 
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)
-                    curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
+#                    curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
 
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
                     curr_ped_seq = curr_ped_seq
@@ -227,7 +225,6 @@ class TrajectoryDataset(Dataset):
                     curr_loss_mask[_idx, pad_front:pad_end] = 1
                     _curr_ped_dist[_idx, pad_front:pad_end] = curr_ped_dist
                     _curr_ped_abs_speed[_idx, pad_front:pad_end] = curr_ped_abs_speed
-                    _curr_ped_rel_speed[_idx, pad_front:pad_end] = curr_ped_rel_speed
                     num_peds_considered += 1
 
                 if num_peds_considered > min_ped:
@@ -235,7 +232,6 @@ class TrajectoryDataset(Dataset):
                     num_peds_in_seq.append(num_peds_considered)
                     loss_mask_list.append(curr_loss_mask[:num_peds_considered])
                     ped_abs_speed.append(_curr_ped_abs_speed[:num_peds_considered])
-                    ped_rel_speed.append(_curr_ped_rel_speed[:num_peds_considered])
                     seq_list.append(curr_seq[:num_peds_considered])
                     seq_list_rel.append(curr_seq_rel[:num_peds_considered])
 
@@ -245,10 +241,7 @@ class TrajectoryDataset(Dataset):
         loss_mask_list = np.concatenate(loss_mask_list, axis=0)
         non_linear_ped = np.asarray(non_linear_ped)
         ped_abs_speed = np.concatenate(ped_abs_speed, axis=0)
-        ped_rel_speed = np.concatenate(ped_rel_speed, axis=0)
         ped_abs_speed = torch.from_numpy(ped_abs_speed).type(torch.float)
-        ped_rel_speed = torch.from_numpy(ped_rel_speed).type(torch.float)
-#        ped_speed = sigmoid_function(ped_speed)
 
         # Convert numpy -> Torch Tensor
         self.obs_traj = torch.from_numpy(
@@ -265,11 +258,6 @@ class TrajectoryDataset(Dataset):
         self.obs_ped_abs_speed = self.obs_ped_abs_speed.unsqueeze(dim=1)
         self.pred_ped_abs_speed = ped_abs_speed[:, self.obs_len:]
         self.pred_ped_abs_speed = self.pred_ped_abs_speed.unsqueeze(dim=1)
-
-        self.obs_ped_rel_speed = ped_rel_speed[:, :self.obs_len]
-        self.obs_ped_rel_speed = self.obs_ped_rel_speed.unsqueeze(dim=1)
-        self.pred_ped_rel_speed = ped_rel_speed[:, self.obs_len:]
-        self.pred_ped_rel_speed = self.pred_ped_rel_speed.unsqueeze(dim=1)
         cum_start_idx = [0] + np.cumsum(num_peds_in_seq).tolist()
         self.seq_start_end = [
             (start, end)
@@ -285,7 +273,6 @@ class TrajectoryDataset(Dataset):
             self.obs_traj[start:end, :], self.pred_traj[start:end, :],
             self.obs_traj_rel[start:end, :], self.pred_traj_rel[start:end, :],
             self.non_linear_ped[start:end], self.loss_mask[start:end, :],
-            self.obs_ped_abs_speed[start:end, :], self.pred_ped_abs_speed[start:end, :],
-            self.obs_ped_rel_speed[start:end, :], self.pred_ped_rel_speed[start:end, :]
+            self.obs_ped_abs_speed[start:end, :], self.pred_ped_abs_speed[start:end, :]
         ]
         return out

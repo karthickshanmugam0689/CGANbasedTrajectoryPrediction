@@ -363,11 +363,11 @@ def discriminator_step(
 ):
     batch = [tensor.cuda() for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
-     loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
+     loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
 
-    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, obs_ped_rel_speed)
+    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -402,7 +402,7 @@ def generator_step(
 ):
     batch = [tensor.cuda() for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
-     loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
+     loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
     g_l2_loss_rel = []
@@ -410,7 +410,7 @@ def generator_step(
     loss_mask = loss_mask[:, args.obs_len:]
 
     for _ in range(args.best_k):
-        generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, obs_ped_rel_speed)
+        generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
 
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -471,12 +471,12 @@ def check_accuracy(
         for batch in loader:
             batch = [tensor.cuda() for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
-             non_linear_ped, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
+             non_linear_ped, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
             linear_ped = 1 - non_linear_ped
             loss_mask = loss_mask[:, args.obs_len:]
 
             pred_traj_fake_rel = generator(
-                obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, obs_ped_rel_speed
+                obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed
             )
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 

@@ -336,9 +336,9 @@ class TrajectoryGenerator(nn.Module):
         else:
             return False
 
-    def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, obs_ped_rel_speed, user_noise=None):
+    def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, user_noise=None):
         batch = obs_traj_rel.size(1)
-        ped_speed = obs_ped_rel_speed.squeeze(dim=2).permute(1, 0)
+        ped_speed = obs_ped_speed.squeeze(dim=2).permute(1, 0)
         obs_ped_speed_embedding = self.speed_embedding_layer(ped_speed)
         obs_ped_speed_embedding = obs_ped_speed_embedding.unsqueeze(dim=0)
         # Encode seq
@@ -368,8 +368,6 @@ class TrajectoryGenerator(nn.Module):
         state_tuple = (decoder_h, decoder_c)
         last_pos = obs_traj[-1]
         last_pos_rel = obs_traj_rel[-1]
-        last_speed_abs_pos = obs_ped_speed[-1]
-        last_speed_pos_rel = obs_ped_rel_speed[-1]
         # Predict Trajectory
 
         decoder_out = self.decoder(

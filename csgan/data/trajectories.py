@@ -214,10 +214,6 @@ class TrajectoryDataset(Dataset):
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)
                     curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
 
-                    curr_ped_sigmoid_dist = [sigmoid(x) if x > 0 else 0 for x in curr_ped_dist]
-                    curr_ped_dist = np.around(curr_ped_sigmoid_dist, decimals=4)
-                    curr_ped_dist = np.transpose(curr_ped_dist)
-
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
                     curr_ped_seq = curr_ped_seq
                     # Make coordinates relative

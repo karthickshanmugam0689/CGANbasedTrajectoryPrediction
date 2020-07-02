@@ -163,7 +163,6 @@ class TrajectoryDataset(Dataset):
         loss_mask_list = []
         non_linear_ped = []
         ped_abs_speed = []
-        ped_rel_speed = []
         for path in all_files:
             data = read_file(path, delim)
             frames = np.unique(data[:, 0]).tolist()
@@ -201,16 +200,11 @@ class TrajectoryDataset(Dataset):
 
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
-                    curr_ped_abs_speed_a = curr_ped_dist / 0.4
-                    curr_ped_abs_speed = [sigmoid(x) if x > 0 else 0 for x in curr_ped_abs_speed_a]
+                    curr_ped_abs_speed = curr_ped_dist / 0.4
+                    curr_ped_abs_speed = [sigmoid(x) for x in curr_ped_abs_speed]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
 
-#                    curr_ped_abs_speed = curr_ped_abs_speed.reshape(-1, 1)
-#                    curr_ped_rel_speed = [0.0] + [(t - s) for s, t in zip(curr_ped_abs_speed[:, 0], curr_ped_abs_speed[1:, 0])]
-#                    curr_ped_rel_speed = np.around(curr_ped_rel_speed, decimals=4)
-
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)
-#                    curr_ped_rel_speed = np.transpose(curr_ped_rel_speed)
 
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])
                     curr_ped_seq = curr_ped_seq

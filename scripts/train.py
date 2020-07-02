@@ -31,7 +31,7 @@ parser.add_argument('--delim', default=' ')
 parser.add_argument('--loader_num_workers', default=4, type=int)
 parser.add_argument('--obs_len', default=8, type=int)
 parser.add_argument('--pred_len', default=8, type=int)
-parser.add_argument('--speed', default=0.4, type=float)
+parser.add_argument('--speed_to_add', default=0.2, type=float)
 
 # Optimization
 parser.add_argument('--batch_size', default=64, type=int)
@@ -109,7 +109,6 @@ def get_dtypes(args):
 
 
 def main(args):
-
     train_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/train"
     val_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/val"
     long_dtype, float_dtype = get_dtypes(args)
@@ -147,7 +146,7 @@ def main(args):
         batch_norm=args.batch_norm)
 
     generator.apply(init_weights)
-    generator.type(torch.cuda.FloatTensor).train()
+    generator.type(torch.FloatTensor).train()
     logger.info('Here is the generator:')
     logger.info(generator)
 
@@ -163,7 +162,7 @@ def main(args):
         d_type=args.d_type)
 
     discriminator.apply(init_weights)
-    discriminator.type(torch.cuda.FloatTensor).train()
+    discriminator.type(torch.FloatTensor).train()
     logger.info('Here is the discriminator:')
     logger.info(discriminator)
 
@@ -361,13 +360,13 @@ def main(args):
 def discriminator_step(
         args, batch, generator, discriminator, d_loss_fn, optimizer_d
 ):
-    batch = [tensor.cuda() for tensor in batch]
+    batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
      loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
+    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 0, args.speed_to_add)
 
-    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -400,7 +399,7 @@ def discriminator_step(
 def generator_step(
         args, batch, generator, discriminator, g_loss_fn, optimizer_g
 ):
-    batch = [tensor.cuda() for tensor in batch]
+    batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
      loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
     losses = {}
@@ -410,7 +409,7 @@ def generator_step(
     loss_mask = loss_mask[:, args.obs_len:]
 
     for _ in range(args.best_k):
-        generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed)
+        generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 0, args.speed_to_add)
 
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -469,14 +468,14 @@ def check_accuracy(
     generator.eval()
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor.cuda() for tensor in batch]
+            batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
              non_linear_ped, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
             linear_ped = 1 - non_linear_ped
             loss_mask = loss_mask[:, args.obs_len:]
 
             pred_traj_fake_rel = generator(
-                obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed
+                obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 0, args.speed_to_add
             )
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 

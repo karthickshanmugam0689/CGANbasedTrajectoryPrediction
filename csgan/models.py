@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import numpy as np
+from csgan.utils import relative_to_abs, get_dset_path
 
 
 def make_mlp(dim_list, activation='leakyrelu', batch_norm=True, dropout=0):
@@ -26,6 +27,7 @@ def get_noise(shape, noise_type):
         return torch.rand(*shape).sub_(0.5).mul_(2.0)
     raise ValueError('Unrecognized noise type "%s"' % noise_type)
 
+
 class Encoder(nn.Module):
     def __init__(
             self, embedding_dim=64, h_dim=64, mlp_dim=1024, num_layers=1,
@@ -41,20 +43,18 @@ class Encoder(nn.Module):
         self.encoder = nn.LSTM(
             embedding_dim, h_dim, num_layers, dropout=dropout
         )
-
-        self.spatial_embedding = nn.Linear(2, embedding_dim)
-        self.spatial_speed_embedding = nn.Linear(1, embedding_dim)
         self.spatial_embedding_with_speeed = nn.Linear(3, embedding_dim)
 
     def init_hidden(self, batch):
         return (
-            torch.zeros(self.num_layers, batch, self.h_dim).cuda(),
-            torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+            torch.zeros(self.num_layers, batch, self.h_dim),#.cuda(),
+            torch.zeros(self.num_layers, batch, self.h_dim)#.cuda()
         )
 
-    def forward(self, obs_traj):
+    def forward(self, obs_traj, obs_ped_speed):
         batch = obs_traj.size(1)
-        obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
+        obs_speed_embedding = torch.cat([obs_traj, obs_ped_speed], dim=2)
+        obs_traj_embedding = self.spatial_embedding_with_speeed(obs_speed_embedding.contiguous().view(-1, 3))
         obs_traj_embedding = obs_traj_embedding.view(-1, batch, self.embedding_dim)
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
@@ -70,7 +70,7 @@ def calc_abs_speed(curr_pos, prev_pos):
     curr_abs_speed = np.array([sigmoid(x) if x > 0 else 0 for x in curr_abs_speed])
     curr_abs_speed = np.around(curr_abs_speed, decimals=4)
     curr_abs_speed = curr_abs_speed.reshape(-1, 1)
-    curr_abs_speed = torch.from_numpy(curr_abs_speed).type(torch.float).cuda()
+    curr_abs_speed = torch.from_numpy(curr_abs_speed).type(torch.float)#.cuda()
     return curr_abs_speed
 
 
@@ -118,17 +118,15 @@ class Decoder(nn.Module):
                 dropout=dropout
             )
 
-        self.spatial_embedding_with_speed = nn.Linear(128, embedding_dim)
         self.traj_speed_embedding = nn.Linear(3, embedding_dim)
-        self.spatial_traj_embedding = nn.Linear(2, embedding_dim)
-        self.spatial_speed_embedding = nn.Linear(1, embedding_dim)
         self.spatial_embedding = nn.Linear(2, embedding_dim)
         self.hidden2pos = nn.Linear(h_dim, 2)
 
-    def forward(self, last_pos, last_pos_rel, state_tuple):
+    def forward(self, last_pos, last_pos_rel, state_tuple, last_pos_speed):
         batch = last_pos.size(0)
         pred_traj_fake_rel = []
-        decoder_input = self.spatial_embedding(last_pos_rel)
+        last_pos_speed_embedding = torch.cat([last_pos_rel, last_pos_speed], dim=1)
+        decoder_input = self.traj_speed_embedding(last_pos_speed_embedding)
         decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
         for _ in range(self.seq_len):
@@ -199,6 +197,19 @@ class PoolHiddenNet(nn.Module):
         return pool_h
 
 
+def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end):
+    for _, (start, end) in enumerate(seq_start_end):
+        start = start.item()
+        end = end.item()
+        # Increasing speed of one pedestrian in every sequence to test the model
+        if pred_traj_first_speed[start] + speed_to_add >= 1:
+            pred_traj_first_speed[start] = 1
+        else:
+            pred_traj_first_speed[start] += speed_to_add
+        #pred_traj_first_speed[start] = sigmoid_layer(pred_traj_first_speed[start])
+        # To increase speed of all pedestrians in a sequence, add value to pred_test_speed
+    return pred_traj_first_speed
+
 
 class TrajectoryGenerator(nn.Module):
     def __init__(
@@ -229,7 +240,7 @@ class TrajectoryGenerator(nn.Module):
         self.bottleneck_dim = 1024
         self.skip = skip
         self.speed_embedding_sigmoid_layer = nn.Sigmoid()
-        self.speed_embedding_layer = nn.Linear(8, 64)
+        self.speed_control_embedding_layer = nn.Linear(1, 64)
         self.embedding_dim_pooling = embedding_dim_pooling
 
         self.encoder = Encoder(
@@ -336,13 +347,17 @@ class TrajectoryGenerator(nn.Module):
         else:
             return False
 
-    def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, user_noise=None):
+    def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj, train_or_test,
+                speed_to_add, user_noise=None):
         batch = obs_traj_rel.size(1)
-        ped_speed = obs_ped_speed.squeeze(dim=2).permute(1, 0)
-        obs_ped_speed_embedding = self.speed_embedding_layer(ped_speed)
-        obs_ped_speed_embedding = obs_ped_speed_embedding.unsqueeze(dim=0)
+        obs_traj = self.speed_embedding_sigmoid_layer(obs_traj)
+        first_pred_speed = pred_ped_speed[0, :, :]  # Control speed signal used for training purpose
+        train_or_test = 1
+        if train_or_test == 1:  # Control speed signal used for testing purpose
+            first_pred_speed = speed_control(first_pred_speed, speed_to_add, seq_start_end)
+        pred_control_speed_embedding = self.speed_control_embedding_layer(first_pred_speed)
         # Encode seq
-        final_encoder_h = self.encoder(obs_traj_rel)
+        final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
         # Pool States
         if self.pooling_type:
             end_pos = obs_traj[-1, :, :]
@@ -350,7 +365,7 @@ class TrajectoryGenerator(nn.Module):
             pool_h = self.pool_net(final_encoder_h, seq_start_end, end_pos, end_speed_pos)
             # concatenating pooling module output with encoder output and speed embedding
             mlp_decoder_context_input = torch.cat(
-                [final_encoder_h.view(-1, self.encoder_h_dim), pool_h, obs_ped_speed_embedding.view(-1, self.encoder_h_dim)], dim=1)
+                [final_encoder_h.view(-1, self.encoder_h_dim), pool_h, pred_control_speed_embedding], dim=1)
         else:
             mlp_decoder_context_input = final_encoder_h.view(
                 -1, self.encoder_h_dim)
@@ -363,20 +378,37 @@ class TrajectoryGenerator(nn.Module):
         decoder_h = self.add_noise(noise_input, seq_start_end, user_noise=user_noise)
         decoder_h = torch.unsqueeze(decoder_h, 0)
 
-        decoder_c = torch.zeros(self.num_layers, batch, self.decoder_h_dim).cuda()
+        decoder_c = torch.zeros(self.num_layers, batch, self.decoder_h_dim)#.cuda()
 
         state_tuple = (decoder_h, decoder_c)
         last_pos = obs_traj[-1]
         last_pos_rel = obs_traj_rel[-1]
+        last_pos_speed = obs_ped_speed[-1]
         # Predict Trajectory
 
         decoder_out = self.decoder(
             last_pos,
             last_pos_rel,
-            state_tuple
+            state_tuple,
+            last_pos_speed
         )
         pred_traj_fake_rel, final_decoder_h = decoder_out
 
+        if train_or_test == 1:
+            for _, (start, end) in enumerate(seq_start_end):
+                if start == 210 or start == 215 or start == 222:
+                    start = start.item()
+                    end = end.item()
+                    obs_test_traj = obs_traj[:, start:end, :]
+                    pred_test_traj_rel = pred_traj_fake_rel[:, start:end, :]
+                    pred_test_traj = relative_to_abs(pred_test_traj_rel, obs_test_traj[-1])
+                    pred_real_traj = pred_traj[:, start:end, :]
+                    speed_added = first_pred_speed[start:end, 1]
+                    print("Start end", start, end)
+                    print("speed after adding:", speed_added)
+                    print("speed", speed_to_add, "pred_test_traj", pred_test_traj)
+                    print("pred_real_traj", pred_real_traj)
+                    print("§§$$%&//(())*/-")
         return pred_traj_fake_rel
 
 

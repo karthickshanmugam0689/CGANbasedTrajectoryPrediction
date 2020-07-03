@@ -47,8 +47,8 @@ class Encoder(nn.Module):
 
     def init_hidden(self, batch):
         return (
-            torch.zeros(self.num_layers, batch, self.h_dim),#.cuda(),
-            torch.zeros(self.num_layers, batch, self.h_dim)#.cuda()
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda(),
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda()
         )
 
     def forward(self, obs_traj, obs_ped_speed):
@@ -63,20 +63,6 @@ class Encoder(nn.Module):
 
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
-
-def calc_abs_speed(curr_pos, prev_pos):
-    distance_metric = nn.PairwiseDistance(p=2)
-    curr_abs_speed = distance_metric(curr_pos, prev_pos) / 0.4
-    curr_abs_speed = np.array([sigmoid(x) if x > 0 else 0 for x in curr_abs_speed])
-    curr_abs_speed = np.around(curr_abs_speed, decimals=4)
-    curr_abs_speed = curr_abs_speed.reshape(-1, 1)
-    curr_abs_speed = torch.from_numpy(curr_abs_speed).type(torch.float)#.cuda()
-    return curr_abs_speed
-
-
-def calc_rel_speed(curr_speed, prev_speed):
-    rel_speed = curr_speed - prev_speed
-    return rel_speed
 
 
 class Decoder(nn.Module):
@@ -206,7 +192,6 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end):
             pred_traj_first_speed[start] = 1
         else:
             pred_traj_first_speed[start] += speed_to_add
-        #pred_traj_first_speed[start] = sigmoid_layer(pred_traj_first_speed[start])
         # To increase speed of all pedestrians in a sequence, add value to pred_test_speed
     return pred_traj_first_speed
 
@@ -239,7 +224,6 @@ class TrajectoryGenerator(nn.Module):
         self.pool_every_timestep = pool_every_timestep
         self.bottleneck_dim = 1024
         self.skip = skip
-        self.speed_embedding_sigmoid_layer = nn.Sigmoid()
         self.speed_control_embedding_layer = nn.Linear(1, 64)
         self.embedding_dim_pooling = embedding_dim_pooling
 
@@ -367,8 +351,7 @@ class TrajectoryGenerator(nn.Module):
             mlp_decoder_context_input = torch.cat(
                 [final_encoder_h.view(-1, self.encoder_h_dim), pool_h, pred_control_speed_embedding], dim=1)
         else:
-            mlp_decoder_context_input = final_encoder_h.view(
-                -1, self.encoder_h_dim)
+            mlp_decoder_context_input = final_encoder_h.view(-1, self.encoder_h_dim)
 
         # Add Noise
         if self.mlp_decoder_needed():
@@ -378,7 +361,7 @@ class TrajectoryGenerator(nn.Module):
         decoder_h = self.add_noise(noise_input, seq_start_end, user_noise=user_noise)
         decoder_h = torch.unsqueeze(decoder_h, 0)
 
-        decoder_c = torch.zeros(self.num_layers, batch, self.decoder_h_dim)#.cuda()
+        decoder_c = torch.zeros(self.num_layers, batch, self.decoder_h_dim).cuda()
 
         state_tuple = (decoder_h, decoder_c)
         last_pos = obs_traj[-1]
@@ -403,7 +386,7 @@ class TrajectoryGenerator(nn.Module):
                     pred_test_traj_rel = pred_traj_fake_rel[:, start:end, :]
                     pred_test_traj = relative_to_abs(pred_test_traj_rel, obs_test_traj[-1])
                     pred_real_traj = pred_traj[:, start:end, :]
-                    speed_added = first_pred_speed[start:end, 1]
+                    speed_added = first_pred_speed[start:end]
                     print("Start end", start, end)
                     print("speed after adding:", speed_added)
                     print("speed", speed_to_add, "pred_test_traj", pred_test_traj)

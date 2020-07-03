@@ -200,8 +200,8 @@ class TrajectoryDataset(Dataset):
 
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
-                    curr_ped_abs_speed = curr_ped_dist / 0.4
-                    curr_ped_abs_speed = [sigmoid(x) for x in curr_ped_abs_speed]
+                    curr_ped_abs_speed_a = curr_ped_dist / 0.4
+                    curr_ped_abs_speed = [sigmoid(x) if x > 0 else 0 for x in curr_ped_abs_speed_a]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
 
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)

@@ -334,7 +334,6 @@ class TrajectoryGenerator(nn.Module):
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj, train_or_test,
                 speed_to_add, user_noise=None):
         batch = obs_traj_rel.size(1)
-        obs_traj = self.speed_embedding_sigmoid_layer(obs_traj)
         first_pred_speed = pred_ped_speed[0, :, :]  # Control speed signal used for training purpose
         train_or_test = 1
         if train_or_test == 1:  # Control speed signal used for testing purpose

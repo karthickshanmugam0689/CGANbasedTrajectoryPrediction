@@ -187,12 +187,11 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end):
     for _, (start, end) in enumerate(seq_start_end):
         start = start.item()
         end = end.item()
-        # Increasing speed of one pedestrian in every sequence to test the model
-        if pred_traj_first_speed[start] + speed_to_add >= 1:
-            pred_traj_first_speed[start] = 1
-        else:
-            pred_traj_first_speed[start] += speed_to_add
-        # To increase speed of all pedestrians in a sequence, add value to pred_test_speed
+        for a in range(start, end):
+            if pred_traj_first_speed[a] + speed_to_add > 1:
+                pred_traj_first_speed[a] = 1
+            else:
+                pred_traj_first_speed[a] += speed_to_add
     return pred_traj_first_speed
 
 

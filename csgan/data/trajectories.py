@@ -78,12 +78,11 @@ def poly_fit(traj, traj_len, threshold):
     else:
         return 0.0
 
-def get_speed_labels(num_sequences, frame_data, seq_len, frames):
-    logger.info("Clustering to find labels")
+def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
+    logger.info("Normalizing the dataset")
     ped_speed = []
     for idx in range(0, num_sequences):
         curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)
-        curr_ped_frame_seq = np.unique(curr_seq_data[:, 0]).tolist()
         peds_in_curr_seq = np.unique(curr_seq_data[:, 1])
         _curr_ped_speed = np.empty((16, 1))
         for _, ped_id in enumerate(peds_in_curr_seq):
@@ -98,47 +97,13 @@ def get_speed_labels(num_sequences, frame_data, seq_len, frames):
             curr_ped_y_axis_new = [0.0] + [np.abs(s - t) for s, t in
                                            zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
             curr_ped_dist_formula = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
-            curr_ped_dist_formula = curr_ped_dist_formula / 0.4
-            for a, b in zip(curr_ped_frame_seq, curr_ped_dist_formula):
-                ped_speed.append([a, ped_id, b])
-    ped_speed = np.asarray(ped_speed)
-    km = KMeans(5)
-    #clusters = DBSCAN(eps=0.03, min_samples=200, metric='manhattan').fit_predict(ped_speed[:, 2].reshape(-1, 1))
-    #clusterer = hdbscan.HDBSCAN(min_cluster_size=150)
-    #clusters = clusterer.fit_predict(ped_speed[:, 2].reshape(-1, 1))
-    clusters = km.fit_predict(ped_speed[:, 2].reshape(-1, 1))
+            curr_ped_speed = curr_ped_dist_formula / 0.4
+            ped_speed.append(curr_ped_speed)
+    ped_speed = np.asarray(ped_speed).reshape(-1, 1)
+    max_speed = np.amax(ped_speed)
+    min_speed = np.min(ped_speed)
 
-    # Annotating the labels using python scripts
-    no_of_labels = np.unique(clusters)
-    clus_test = np.concatenate((ped_speed, clusters.reshape(-1, 1)), axis=1)
-    min_max_range = []
-
-    for a in no_of_labels:
-        label = clus_test[clus_test[:, 3] == a, :]
-        label = label[:, 2]
-        min_max_label = (min(label), max(label))
-        min_max_range.append(min_max_label)
-    sorted_labels = sorted(min_max_range)
-    sorted_labels = np.array(sorted_labels)
-    cluster_labels_sorted = []
-
-    for b in ped_speed[:, 2]:
-        for idx, a in enumerate(sorted_labels):
-            if (b >= a[0]) and (b <= a[1]):
-                cluster_labels_sorted.append([b, idx])
-
-
-    cluster_labels_sorted = np.array(cluster_labels_sorted)
-    clusters = cluster_labels_sorted[:, 1]
-    ped_speed = np.concatenate((ped_speed, clusters.reshape(-1, 1)), axis=1)
-
-    # PLOTTING
-    # plt.scatter(ped_speed[:, 0], ped_speed[:, 2], c=cluster_labels_sorted[:, 1])
-    # plt.title("Clustering of Speed labels with K")
-    # plt.xlabel("Pedestrian ID")
-    # plt.ylabel("Speed")
-    # plt.show()
-    return ped_speed
+    return min_speed, max_speed
 
 class TrajectoryDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
@@ -170,8 +135,7 @@ class TrajectoryDataset(Dataset):
             for frame in frames:
                 frame_data.append(data[frame == data[:, 0], :])
             num_sequences = int(math.ceil((len(frames) - self.seq_len + 1) / skip))
-            #clusters = get_speed_labels(num_sequences, frame_data, self.seq_len, frames)
-            #counter = 0
+            min_speed, max_speed = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
             for idx in range(0, num_sequences * self.skip + 1, skip):
                 curr_seq_data = np.concatenate(
                     frame_data[idx:idx + self.seq_len], axis=0)
@@ -201,7 +165,7 @@ class TrajectoryDataset(Dataset):
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                     curr_ped_abs_speed_a = curr_ped_dist / 0.4
-                    curr_ped_abs_speed = [sigmoid(x) if x > 0 else 0 for x in curr_ped_abs_speed_a]
+                    curr_ped_abs_speed = [(x - min_speed)/(max_speed - min_speed) for x in curr_ped_abs_speed_a]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
 
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)

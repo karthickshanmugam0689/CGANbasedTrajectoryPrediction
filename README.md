@@ -1,11 +1,11 @@
-# CGANbasedTrajectoryPrediction
+== CGANbasedTrajectoryPrediction
 
-This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
+* This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
 
 To reproduce the project, run the following command:
 
 If using virtual environment, run:
-python CGANbasedTrajectoryPrediction/setup.py develop
+> python CGANbasedTrajectoryPrediction/setup.py develop
 
 If running in global environment, run:
 python CGANbasedTrajectoryPrediction/setup.py install

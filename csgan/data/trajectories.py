@@ -6,13 +6,6 @@ import numpy as np
 
 import torch
 from torch.utils.data import Dataset
-import torch.nn as nn
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import DBSCAN
-from sklearn.cluster import KMeans
-import hdbscan
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +72,6 @@ def poly_fit(traj, traj_len, threshold):
         return 0.0
 
 def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
-    logger.info("Normalizing the dataset")
     ped_speed = []
     for idx in range(0, num_sequences):
         curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)

@@ -109,6 +109,7 @@ def get_dtypes(args):
 
 
 def main(args):
+    logger.info("Process Started")
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_num
     train_path = get_dset_path(args.dataset_name, 'train')
     val_path = get_dset_path(args.dataset_name, 'val')

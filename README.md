@@ -16,7 +16,7 @@ python CGANbasedTrajectoryPrediction/setup.py install
 
 To install all dependencies, run:
 ````
-pip install -r CGANbasedTrajectoryPrediction/requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
+conda install --yes --file requirements.txt
 ````
 
 To train the model, run:

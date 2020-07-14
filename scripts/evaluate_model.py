@@ -71,11 +71,29 @@ def evaluate(args, loader, generator, num_samples):
 
             for _ in range(num_samples):
                 pred_traj_fake_rel = generator(
-                    obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, obs_ped_rel_speed
+                    obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 0, 0
                 )
                 pred_traj_fake = relative_to_abs(
                     pred_traj_fake_rel, obs_traj[-1]
                 )
+
+                pred_with_speed_01 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.1)
+                pred_traj_fake_with_speed_01 = relative_to_abs(pred_with_speed_01, obs_traj[-1])
+
+                pred_with_speed_02 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.2)
+                pred_traj_fake_with_speed_02 = relative_to_abs(pred_with_speed_02, obs_traj[-1])
+
+                pred_with_speed_03 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.3)
+                pred_traj_fake_with_speed_03 = relative_to_abs(pred_with_speed_03, obs_traj[-1])
+
+                pred_with_speed_04 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.4)
+                pred_traj_fake_with_speed_04 = relative_to_abs(pred_with_speed_04, obs_traj[-1])
+
+                pred_with_speed_05 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.5)
+                pred_traj_fake_with_speed_05 = relative_to_abs(pred_with_speed_05, obs_traj[-1])
+
+                #print(pred_traj_fake_with_speed_01, pred_traj_fake_with_speed_02, pred_traj_fake_with_speed_03, pred_traj_fake_with_speed_04,
+                #pred_traj_fake_with_speed_05)
                 ade.append(displacement_error(
                     pred_traj_fake, pred_traj_gt, mode='raw'
                 ))

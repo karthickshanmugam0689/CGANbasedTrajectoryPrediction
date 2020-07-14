@@ -109,9 +109,9 @@ def get_dtypes(args):
 
 
 def main(args):
-
-    train_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/train"
-    val_path = "C:/Users/visha/MasterThesis/sgan/datasets/hotel/val"
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_num
+    train_path = get_dset_path(args.dataset_name, 'train')
+    val_path = get_dset_path(args.dataset_name, 'val')
     long_dtype, float_dtype = get_dtypes(args)
     logger.info("Initializing train dataset")
     train_dset, train_loader = data_loader(args, train_path)

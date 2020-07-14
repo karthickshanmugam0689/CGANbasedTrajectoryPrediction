@@ -4,17 +4,17 @@
 
 **To reproduce the project, run the following command:**
 
-If using virtual environment, run:
+Initially, clone the repo:
 ````
-python CGANbasedTrajectoryPrediction/setup.py develop
+git clone https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction.git
 ````
 
-If running in global environment, run:
+This command will recognize the base package.
 ````
 python CGANbasedTrajectoryPrediction/setup.py install
 ````
 
-This command will recognize the base package. To install all dependencies, run:
+To install all dependencies, run:
 ````
 pip install -r CGANbasedTrajectoryPrediction/requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
 ````

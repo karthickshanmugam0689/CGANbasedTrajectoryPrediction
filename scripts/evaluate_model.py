@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str)
 parser.add_argument('--num_samples', default=20, type=int)
 parser.add_argument('--dset_type', default='test', type=str)
-parser.add_argument('--test_data_path', default='test', type=str)
+parser.add_argument('--speed_to_add', default=0, type=float)
 
 
 def get_generator(checkpoint):
@@ -63,37 +63,24 @@ def evaluate(args, loader, generator, num_samples):
     with torch.no_grad():
         for batch in loader:
             batch = [tensor.cuda() for tensor in batch]
-            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
-             non_linear_ped, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, obs_ped_rel_speed, pred_ped_rel_speed) = batch
+            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
+            loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
 
             ade, fde = [], []
             total_traj += pred_traj_gt.size(1)
 
             for _ in range(num_samples):
+                #Original traj prediction
                 pred_traj_fake_rel = generator(
                     obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 0, 0
                 )
                 pred_traj_fake = relative_to_abs(
                     pred_traj_fake_rel, obs_traj[-1]
                 )
+                # Trajectory with added speed
+                pred_with_speed = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, args.speed_to_add)
+                pred_traj_fake_with_speed_01 = relative_to_abs(pred_with_speed, obs_traj[-1])
 
-                pred_with_speed_01 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.1)
-                pred_traj_fake_with_speed_01 = relative_to_abs(pred_with_speed_01, obs_traj[-1])
-
-                pred_with_speed_02 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.2)
-                pred_traj_fake_with_speed_02 = relative_to_abs(pred_with_speed_02, obs_traj[-1])
-
-                pred_with_speed_03 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.3)
-                pred_traj_fake_with_speed_03 = relative_to_abs(pred_with_speed_03, obs_traj[-1])
-
-                pred_with_speed_04 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.4)
-                pred_traj_fake_with_speed_04 = relative_to_abs(pred_with_speed_04, obs_traj[-1])
-
-                pred_with_speed_05 = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, 0.5)
-                pred_traj_fake_with_speed_05 = relative_to_abs(pred_with_speed_05, obs_traj[-1])
-
-                #print(pred_traj_fake_with_speed_01, pred_traj_fake_with_speed_02, pred_traj_fake_with_speed_03, pred_traj_fake_with_speed_04,
-                #pred_traj_fake_with_speed_05)
                 ade.append(displacement_error(
                     pred_traj_fake, pred_traj_gt, mode='raw'
                 ))
@@ -112,25 +99,14 @@ def evaluate(args, loader, generator, num_samples):
 
 
 def main(args):
-    if os.path.isdir(args.model_path):
-        filenames = os.listdir(args.model_path)
-        filenames.sort()
-        paths = [
-            os.path.join(args.model_path, file_) for file_ in filenames
-        ]
-    else:
-        paths = [args.model_path]
-
-    for path in paths:
-        checkpoint = torch.load(path)
-        generator = get_generator(checkpoint)
-        _args = AttrDict(checkpoint['args'])
-        path = args.test_data_path
-        _, loader = data_loader(_args, path)
-        ade, fde = evaluate(_args, loader, generator, args.num_samples)
-        print('Dataset: {}, Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}'.format(
-            _args.dataset_name, _args.pred_len, ade, fde))
-
+    path = os.getcwd() + "/scripts/checkpoint_with_model.pt"
+    checkpoint = torch.load(path)
+    generator = get_generator(checkpoint)
+    _args = AttrDict(checkpoint['args'])
+    path = get_dset_path(_args.dataset_name, args.dset_type)
+    _, loader = data_loader(_args, path)
+    ade, fde = evaluate(_args, loader, generator, args.num_samples)
+    print('Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}'.format(_args.pred_len, ade, fde))
 
 if __name__ == '__main__':
     args = parser.parse_args()

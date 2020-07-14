@@ -187,6 +187,7 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end):
     for _, (start, end) in enumerate(seq_start_end):
         start = start.item()
         end = end.item()
+        # Increasing the speed of one pedestrian in all scenes
         for a in range(start, end):
             if pred_traj_first_speed[a] + speed_to_add > 1:
                 pred_traj_first_speed[a] = 1
@@ -334,7 +335,6 @@ class TrajectoryGenerator(nn.Module):
                 speed_to_add, user_noise=None):
         batch = obs_traj_rel.size(1)
         first_pred_speed = pred_ped_speed[0, :, :]  # Control speed signal used for training purpose
-        train_or_test = 1
         if train_or_test == 1:  # Control speed signal used for testing purpose
             first_pred_speed = speed_control(first_pred_speed, speed_to_add, seq_start_end)
         pred_control_speed_embedding = self.speed_control_embedding_layer(first_pred_speed)

@@ -32,6 +32,8 @@ parser.add_argument('--loader_num_workers', default=4, type=int)
 parser.add_argument('--obs_len', default=8, type=int)
 parser.add_argument('--pred_len', default=8, type=int)
 parser.add_argument('--speed_to_add', default=0, type=float)
+parser.add_argument('--train_path', type=str)
+parser.add_argument('--val_path', type=str)
 
 # Optimization
 parser.add_argument('--batch_size', default=64, type=int)
@@ -111,13 +113,11 @@ def get_dtypes(args):
 def main(args):
     logger.info("Process Started")
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_num
-    train_path = get_dset_path(args.dataset_name, 'train')
-    val_path = get_dset_path(args.dataset_name, 'val')
     long_dtype, float_dtype = get_dtypes(args)
     logger.info("Initializing train dataset")
-    train_dset, train_loader = data_loader(args, train_path)
+    train_dset, train_loader = data_loader(args, args.train_path)
     logger.info("Initializing val dataset")
-    _, val_loader = data_loader(args, val_path)
+    _, val_loader = data_loader(args, args.val_path)
 
     iterations_per_epoch = len(train_dset) / args.batch_size / args.d_steps
     if args.num_epochs:

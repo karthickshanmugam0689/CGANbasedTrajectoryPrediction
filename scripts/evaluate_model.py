@@ -12,7 +12,6 @@ from csgan.utils import relative_to_abs, get_dset_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str)
 parser.add_argument('--num_samples', default=20, type=int)
-parser.add_argument('--dset_type', default='test', type=str)
 parser.add_argument('--speed_to_add', default=0, type=float)
 parser.add_argument('--test_path', type=str)
 
@@ -100,7 +99,7 @@ def evaluate(args, loader, generator, num_samples):
 
 
 def main(args):
-    path = os.getcwd() + "/scripts/checkpoint_with_model.pt"
+    path = os.getcwd() + "\checkpoint_with_model.pt"
     checkpoint = torch.load(path)
     generator = get_generator(checkpoint)
     _args = AttrDict(checkpoint['args'])

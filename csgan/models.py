@@ -410,8 +410,8 @@ class EncoderDiscriminator(nn.Module):
 
     def init_hidden(self, batch):
         return (
-            torch.zeros(self.num_layers, batch, self.h_dim),
-            torch.zeros(self.num_layers, batch, self.h_dim)
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda(),
+            torch.zeros(self.num_layers, batch, self.h_dim).cuda()
         )
 
     def forward(self, obs_traj):
@@ -435,14 +435,6 @@ class TrajectoryDiscriminator(nn.Module):
         self.mlp_dim = mlp_dim
         self.h_dim = h_dim
         self.d_type = d_type
-
-        self.encoder = Encoder(
-            embedding_dim=embedding_dim,
-            h_dim=h_dim,
-            mlp_dim=mlp_dim,
-            num_layers=num_layers,
-            dropout=dropout
-        )
 
         self.encoder_d = EncoderDiscriminator(
             embedding_dim=embedding_dim,

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-# Each column represents particular pedestrian trajectories. Eg: Column1: Ped1, Column2: Ped2...
+# Each column represents particular pedestrian trajectories for particular sequence. Eg: Column1: Ped1, Column2: Ped2...
 positions = np.array([[[ 0.2907,  0.2606], [-0.8884, -6.7368], [-0.5884,  2.8360], [-0.6548,  3.3607], [ 1.7687, -4.2044], [ 2.4916, -4.3365], [ 1.1101, -1.2508], [ 1.6908, -0.9436], [ 2.2341, -1.0901]],
                       [[ 0.3367,  0.1755], [-0.8987, -6.7787], [-0.5936,  2.8392], [-0.6474,  3.3609], [ 1.7548, -4.7662], [ 2.5043, -4.8626], [ 0.9810, -1.6482], [ 1.4765, -1.2774], [ 1.9942, -1.4231]],
                     [[ 0.3673,  0.0832], [-0.9191, -6.8266], [-0.6023,  2.8414], [-0.6434,  3.3683], [ 1.6985, -5.2862], [ 2.4542, -5.3132], [ 0.7973, -2.0043], [ 1.1939, -1.5474], [ 1.6592, -1.6669]],

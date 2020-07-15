@@ -26,12 +26,12 @@ pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable
 
 To train the model, run:
 ````
-python CGANbasedTrajectoryPrediction/scripts/train.py
+python CGANbasedTrajectoryPrediction/scripts/train.py --train_path provide_train_path --val_path provide_val_path
 ````
 
 To evaluate the model with no speed, run:
 ````
-python CGANbasedTrajectoryPrediction/scripts/evaluate_model.py
+python CGANbasedTrajectoryPrediction/scripts/evaluate_model.py --test_path provide_test_path
 ````
 
 To evaluate the model with additional speed, run:

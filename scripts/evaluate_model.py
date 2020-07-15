@@ -14,6 +14,7 @@ parser.add_argument('--model_path', type=str)
 parser.add_argument('--num_samples', default=20, type=int)
 parser.add_argument('--dset_type', default='test', type=str)
 parser.add_argument('--speed_to_add', default=0, type=float)
+parser.add_argument('--test_path', type=str)
 
 
 def get_generator(checkpoint):
@@ -103,7 +104,7 @@ def main(args):
     checkpoint = torch.load(path)
     generator = get_generator(checkpoint)
     _args = AttrDict(checkpoint['args'])
-    path = get_dset_path(_args.dataset_name, args.dset_type)
+    path = args.test_path
     _, loader = data_loader(_args, path)
     ade, fde = evaluate(_args, loader, generator, args.num_samples)
     print('Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}'.format(_args.pred_len, ade, fde))

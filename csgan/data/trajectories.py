@@ -80,10 +80,6 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
         for _, ped_id in enumerate(peds_in_curr_seq):
             curr_ped_seq = curr_seq_data[curr_seq_data[:, 1] == ped_id, :]
             curr_ped_seq = np.around(curr_ped_seq, decimals=4)
-            pad_front = frames.index(curr_ped_seq[0, 0]) - idx
-            pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
-            if pad_end - pad_front != seq_len:
-                continue
             curr_ped_x_axis_new = [0.0] + [np.abs(s - t) for s, t in
                                            zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
             curr_ped_y_axis_new = [0.0] + [np.abs(s - t) for s, t in

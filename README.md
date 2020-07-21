@@ -1,16 +1,12 @@
-# **CGANbasedTrajectoryPrediction**
+# **CGANbasedTrajectoryPrediction**  (WORK IS STILL IN PROGRESS - BETA VERSION)
 
 * This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
 
 Pedestrian Simulation with Original Speed:
-![DistancePlot](https://github.com/VishalSowrirajan/IotInternshipDBPerformanceTest/blob/master/DB%20Read.PNG)
-
-Pedestrian Simulation with increase in speed:
-![IncreasedSpeedPlot](https://github.com/VishalSowrirajan/IotInternshipDBPerformanceTest/blob/master/DB%20Read.PNG)
+![OriginalSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Actual%20Speed.gif)
 
 The output plot below indicates the distance traveled by the pedestrian with increase in Speed
-
-![DistancePlot](https://github.com/VishalSowrirajan/IotInternshipDBPerformanceTest/blob/master/DB%20Read.PNG)
+![IncreasedSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Speed%200.4.gif)
 
 **To reproduce the project in virtual env, run the following command:**
 

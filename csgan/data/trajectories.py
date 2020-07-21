@@ -87,7 +87,7 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
                                            zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
             curr_ped_y_axis_new = [0.0] + [np.abs(s - t) for s, t in
                                            zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
-            curr_ped_dist_formula = np.add(curr_ped_x_axis_new, curr_ped_y_axis_new)
+            curr_ped_dist_formula = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
             curr_ped_speed = curr_ped_dist_formula / 0.4
             ped_speed.append(curr_ped_speed)
     ped_speed = np.asarray(ped_speed).reshape(-1, 1)

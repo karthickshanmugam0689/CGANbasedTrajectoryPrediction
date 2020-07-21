@@ -2,6 +2,16 @@
 
 * This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
 
+Pedestrian Simulation with Original Speed:
+![DistancePlot](https://github.com/VishalSowrirajan/IotInternshipDBPerformanceTest/blob/master/DB%20Read.PNG)
+
+Pedestrian Simulation with increase in speed:
+![IncreasedSpeedPlot](https://github.com/VishalSowrirajan/IotInternshipDBPerformanceTest/blob/master/DB%20Read.PNG)
+
+The output plot below indicates the distance traveled by the pedestrian with increase in Speed
+
+![DistancePlot](https://github.com/VishalSowrirajan/IotInternshipDBPerformanceTest/blob/master/DB%20Read.PNG)
+
 **To reproduce the project in virtual env, run the following command:**
 
 Initially, clone the repo:

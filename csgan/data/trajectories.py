@@ -76,7 +76,6 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
     for idx in range(0, num_sequences):
         curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)
         peds_in_curr_seq = np.unique(curr_seq_data[:, 1])
-        _curr_ped_speed = np.empty((16, 1))
         for _, ped_id in enumerate(peds_in_curr_seq):
             curr_ped_seq = curr_seq_data[curr_seq_data[:, 1] == ped_id, :]
             curr_ped_seq = np.around(curr_ped_seq, decimals=4)
@@ -92,8 +91,8 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
             curr_ped_speed = curr_ped_dist_formula / 0.4
             ped_speed.append(curr_ped_speed)
     ped_speed = np.asarray(ped_speed).reshape(-1, 1)
-    max_speed = np.amax(ped_speed)
-    min_speed = np.min(ped_speed)
+    max_speed = np.around(np.amax(ped_speed), decimals=4)
+    min_speed = np.around(np.min(ped_speed), decimals=4)
     return min_speed, max_speed
 
 class TrajectoryDataset(Dataset):

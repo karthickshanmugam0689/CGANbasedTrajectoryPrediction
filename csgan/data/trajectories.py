@@ -37,8 +37,10 @@ def seq_collate(data):
 
     return tuple(out)
 
+
 def sigmoid(x):
   return 1 / (1 + math.exp(-x))
+
 
 def read_file(_path, delim='\t'):
     data = []
@@ -71,6 +73,7 @@ def poly_fit(traj, traj_len, threshold):
     else:
         return 0.0
 
+
 def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
     ped_speed = []
     for idx in range(0, num_sequences):
@@ -94,6 +97,7 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
     max_speed = np.around(np.amax(ped_speed), decimals=4)
     min_speed = np.around(np.min(ped_speed), decimals=4)
     return min_speed, max_speed
+
 
 class TrajectoryDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
@@ -125,7 +129,7 @@ class TrajectoryDataset(Dataset):
             for frame in frames:
                 frame_data.append(data[frame == data[:, 0], :])
             num_sequences = int(math.ceil((len(frames) - self.seq_len + 1) / skip))
-            min_speed, max_speed = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
+            #min_speed, max_speed = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
             for idx in range(0, num_sequences * self.skip + 1, skip):
                 curr_seq_data = np.concatenate(
                     frame_data[idx:idx + self.seq_len], axis=0)
@@ -155,7 +159,7 @@ class TrajectoryDataset(Dataset):
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                     curr_ped_abs_speed_a = curr_ped_dist / 0.4
-                    curr_ped_abs_speed = [(x - min_speed)/(max_speed - min_speed) for x in curr_ped_abs_speed_a]
+                    curr_ped_abs_speed = [sigmoid(x) for x in curr_ped_abs_speed_a]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
 
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)

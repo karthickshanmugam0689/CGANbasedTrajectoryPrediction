@@ -1,0 +1,53 @@
+# DATASET OPTIONS
+OBS_LEN = 8
+PRED_LEN = 12
+TRAIN_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/hotel/train'
+VAL_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/hotel/val'
+TEST_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/hotel/test'
+CHECKPOINT_NAME = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/hotel/model_checkpoint.pt'
+NUM_SAMPLE_CHECK = 5000
+
+# PYTORCH DATA LOADER OPTIONS
+NUM_WORKERS = 4
+BATCH = 64
+BATCH_NORM = 0
+
+# ENCODER OPTIONS
+ENCODER_H_DIM = 64
+
+# DECODER OPTIONS
+DECODER_H_DIM = 128
+
+# NOISE OPTIONS
+NOISE_TYPE = 'gaussian'
+NOISE_MIX_TYPE = 'ped'
+
+# HYPER PARAMETERS OPTIONS
+G_LEARNING_RATE, D_LEARNING_RATE = 5e-4, 5e-4
+NUM_LAYERS = 1
+DROPOUT = 0
+NUM_EPOCHS = 200
+CHECKPOINT_EVERY = 5
+USE_GPU = 0
+MLP_DIM = 64
+H_DIM = 64
+EMBEDDING_DIM = 64
+BOTTLENECK_DIM = 1024
+NOISE_DIM = (8, )
+
+DATASET_NAME = 'eth'
+NUM_ITERATIONS = 20000
+NUM_EPOCHS = 200
+POOLING_TYPE = 1
+
+# SPEED PARAMETERS
+
+SPEED_TO_ADD = 0
+
+G_STEPS = 1
+D_STEPS = 2
+ACTIVATION = 'leakyrelu'
+BEST_K = 20
+PRINT_EVERY = 250
+NUM_SAMPLES = 20
+NUM_SAMPLES_CHECK = 5000

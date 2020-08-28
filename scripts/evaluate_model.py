@@ -8,37 +8,23 @@ from csgan.data.loader import data_loader
 from csgan.models import TrajectoryGenerator
 from csgan.losses import displacement_error, final_displacement_error
 from csgan.utils import relative_to_abs, get_dset_path
+from csgan.constants import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str)
 parser.add_argument('--num_samples', default=20, type=int)
 parser.add_argument('--speed_to_add', default=0, type=float)
-parser.add_argument('--test_path', type=str)
 
 
 def get_generator(checkpoint):
     args = AttrDict(checkpoint['args'])
-    generator = TrajectoryGenerator(
-        obs_len=args.obs_len,
-        pred_len=args.pred_len,
-        embedding_dim=args.embedding_dim,
-        embedding_dim_pooling=args.embedding_dim_pool,
-        encoder_h_dim=args.encoder_h_dim_g,
-        decoder_h_dim=args.decoder_h_dim_g,
-        mlp_dim=args.mlp_dim,
-        num_layers=args.num_layers,
-        noise_dim=args.noise_dim,
-        noise_type=args.noise_type,
-        noise_mix_type=args.noise_mix_type,
-        pooling_type=args.pooling_type,
-        pool_every_timestep=args.pool_every_timestep,
-        dropout=args.dropout,
-        bottleneck_dim=args.bottleneck_dim,
-        neighborhood_size=args.neighborhood_size,
-        grid_size=args.grid_size,
-        batch_norm=args.batch_norm)
+    generator = TrajectoryGenerator(obs_len=OBS_LEN, pred_len=PRED_LEN, embedding_dim=EMBEDDING_DIM,
+                                    encoder_h_dim=ENCODER_H_DIM, decoder_h_dim=DECODER_H_DIM,
+                                    mlp_dim=MLP_DIM, num_layers=NUM_LAYERS, noise_dim=NOISE_DIM,
+                                    noise_type=NOISE_TYPE, noise_mix_type=NOISE_MIX_TYPE,
+                                    dropout=DROPOUT, bottleneck_dim=BOTTLENECK_DIM,
+                                    batch_norm=BATCH_NORM, embedding_dim_pooling=EMBEDDING_DIM)
     generator.load_state_dict(checkpoint['g_state'])
-    generator.cuda()
     generator.train()
     return generator
 
@@ -62,24 +48,22 @@ def evaluate(args, loader, generator, num_samples):
     total_traj = 0
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor.cuda() for tensor in batch]
-            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_ped,
-            loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
+            if USE_GPU == 0:
+                batch = [tensor for tensor in batch]
+            else:
+                batch = [tensor.cuda() for tensor in batch]
+            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
+             ped_features) = batch
 
             ade, fde = [], []
             total_traj += pred_traj_gt.size(1)
 
             for _ in range(num_samples):
-                #Original traj prediction
-                pred_traj_fake_rel = generator(
-                    obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 0, 0
-                )
-                pred_traj_fake = relative_to_abs(
-                    pred_traj_fake_rel, obs_traj[-1]
-                )
-                # Trajectory with added speed
-                pred_with_speed = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt, 1, args.speed_to_add)
-                pred_traj_fake_with_speed_01 = relative_to_abs(pred_with_speed, obs_traj[-1])
+                pred_traj_fake_rel = \
+                    generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
+                              args.train_or_test, SPEED_TO_ADD, ped_features)
+
+                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
                 ade.append(displacement_error(
                     pred_traj_fake, pred_traj_gt, mode='raw'
@@ -93,20 +77,21 @@ def evaluate(args, loader, generator, num_samples):
 
             ade_outer.append(ade_sum)
             fde_outer.append(fde_sum)
-        ade = sum(ade_outer) / (total_traj * args.pred_len)
+        ade = sum(ade_outer) / (total_traj * PRED_LEN)
         fde = sum(fde_outer) / (total_traj)
         return ade, fde
 
 
 def main(args):
-    path = os.getcwd() + "\checkpoint_with_model.pt"
-    checkpoint = torch.load(path)
+    test_metric = 1
+    checkpoint = torch.load(CHECKPOINT_NAME)
     generator = get_generator(checkpoint)
     _args = AttrDict(checkpoint['args'])
-    path = args.test_path
-    _, loader = data_loader(_args, path)
-    ade, fde = evaluate(_args, loader, generator, args.num_samples)
-    print('Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}'.format(_args.pred_len, ade, fde))
+    path = TEST_DATASET_PATH
+    _, loader = data_loader(_args, path, test_metric)
+    ade, fde = evaluate(_args, loader, generator, NUM_SAMPLES)
+    print('Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}'.format(PRED_LEN, ade, fde))
+
 
 if __name__ == '__main__':
     args = parser.parse_args()

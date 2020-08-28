@@ -1,19 +1,17 @@
 from torch.utils.data import DataLoader
-
+from csgan.constants import *
 from csgan.data.trajectories import TrajectoryDataset, seq_collate
 
 
-def data_loader(args, path):
+def data_loader(args, path, metric):
     dset = TrajectoryDataset(
         path,
-        obs_len=args.obs_len,
-        pred_len=args.pred_len,
-        delim=args.delim)
+        metric)
 
     loader = DataLoader(
         dset,
-        batch_size=args.batch_size,
+        batch_size=BATCH,
         shuffle=True,
-        num_workers=args.loader_num_workers,
+        num_workers=NUM_WORKERS,
         collate_fn=seq_collate)
     return dset, loader

@@ -49,7 +49,7 @@ def gan_d_loss(scores_real, scores_fake):
     return loss_real + loss_fake
 
 
-def l2_loss(pred_traj, pred_traj_gt, loss_mask, random=0, mode='average'):
+def l2_loss(pred_traj, pred_traj_gt, mode='average'):
     """
     Input:
     - pred_traj: Tensor of shape (seq_len, batch, 2). Predicted trajectory.
@@ -61,12 +61,9 @@ def l2_loss(pred_traj, pred_traj_gt, loss_mask, random=0, mode='average'):
     - loss: l2 loss depending on mode
     """
     seq_len, batch, _ = pred_traj.size()
-    loss = (loss_mask.unsqueeze(dim=2) *
-            (pred_traj_gt.permute(1, 0, 2) - pred_traj.permute(1, 0, 2))**2)
+    loss = ((pred_traj_gt.permute(1, 0, 2) - pred_traj.permute(1, 0, 2))**2)
     if mode == 'sum':
         return torch.sum(loss)
-    elif mode == 'average':
-        return torch.sum(loss) / torch.numel(loss_mask.data)
     elif mode == 'raw':
         return loss.sum(dim=2).sum(dim=1)
 

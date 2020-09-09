@@ -81,7 +81,7 @@ class Decoder(nn.Module):
         self.embedding_dim = EMBEDDING_DIM
         self.h_dim = DECODER_H_DIM
 
-    def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, pred_ped_speed, train_or_test):
+    def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, speed_to_add, pred_ped_speed, train_or_test):
         batch = last_pos.size(0)
         pred_traj_fake_rel = []
         if train_or_test == 0:
@@ -139,7 +139,7 @@ class PoolHiddenNet(nn.Module):
             curr_end_pos = ped_features[start:end, 0:num_ped, :3]
             repeat_hstate = curr_hidden_ped.repeat(num_ped, 1).view(num_ped, num_ped, -1)
 
-            # POSITION ATTENTION
+            # POSITION SPEED Pooling
             position_feature_embedding = self.pos_embedding(curr_end_pos.contiguous().view(-1, 3))
             pos_mlp_input = torch.cat([repeat_hstate.view(-1, self.embedding_dim),
                                        position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
@@ -257,20 +257,21 @@ class TrajectoryGenerator(nn.Module):
         batch = obs_traj_rel.size(1)
         # Encode seq
         final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
+        end_traj_pos = obs_traj[-1, :, :]
+        next_speed = pred_ped_speed[0, :, :]
         # Pool States
         if POOLING_TYPE:
             # SPEED AT WHICH NEXT POSITION NEEDS TO BE PREDICTED
-            attn_pool = self.pool_net(final_encoder_h, seq_start_end, train_or_test,
-                                      speed_to_add, ped_features)
+            sspm = self.pool_net(final_encoder_h, seq_start_end, train_or_test, speed_to_add, end_traj_pos, next_speed)
             # concatenating pooling module output with encoder output and speed embedding
             mlp_decoder_context_input = torch.cat(
-                [final_encoder_h.view(-1, self.encoder_h_dim), attn_pool], dim=1)
+                [final_encoder_h.view(-1, self.encoder_h_dim), sspm], dim=1)
         else:
             mlp_decoder_context_input = final_encoder_h.view(-1, self.encoder_h_dim)
 
         # Add Noise
-        noise_input = self.mlp_decoder_context(mlp_decoder_context_input)
-        decoder_h = self.add_noise(noise_input, seq_start_end, user_noise=user_noise)
+        mlp_input = self.mlp_decoder_context(mlp_decoder_context_input)
+        decoder_h = self.add_noise(mlp_input, seq_start_end, user_noise=user_noise)
         decoder_h = torch.unsqueeze(decoder_h, 0)
 
         if USE_GPU == 0:
@@ -288,6 +289,7 @@ class TrajectoryGenerator(nn.Module):
             last_pos_rel,
             state_tuple,
             seq_start_end,
+            speed_to_add,
             pred_ped_speed,
             train_or_test
         )

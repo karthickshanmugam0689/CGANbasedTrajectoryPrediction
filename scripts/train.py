@@ -11,7 +11,7 @@ import torch.optim as optim
 from csgan.constants import *
 
 from csgan.data.loader import data_loader
-from csgan.losses import gan_g_loss, gan_d_loss, l2_loss
+from csgan.losses import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, final_speed_error
 from csgan.losses import displacement_error, final_displacement_error
 
 from csgan.models import TrajectoryGenerator, TrajectoryDiscriminator
@@ -225,7 +225,7 @@ def discriminator_step(args, batch, generator, discriminator, d_loss_fn, optimiz
     loss = torch.zeros(1).to(pred_traj_gt)
 
     generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
-                              pred_traj_gt, args.train_or_test, SPEED_TO_ADD, ped_features)
+                              pred_traj_gt, 0, SPEED_TO_ADD, ped_features)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -266,7 +266,7 @@ def generator_step(
 
     for _ in range(BEST_K):
         generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
-                                  args.train_or_test, SPEED_TO_ADD, ped_features)
+                                  0, SPEED_TO_ADD, ped_features)
 
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -295,8 +295,10 @@ def check_accuracy(
     d_losses = []
     metrics = {}
     g_l2_losses_abs, g_l2_losses_rel = ([],) * 2
-    disp_error, disp_error_l, disp_error_nl = ([],) * 3
-    f_disp_error, f_disp_error_l, f_disp_error_nl = ([],) * 3
+    disp_error = []
+    f_disp_error = []
+    mean_speed_disp_error = []
+    final_speed_disp_error = []
     total_traj, total_traj_l, total_traj_nl = 0, 0, 0
     mask_sum = 0
     generator.eval()
@@ -309,7 +311,7 @@ def check_accuracy(
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, seq_start_end, obs_ped_speed, pred_ped_speed, ped_features) = batch
 
             pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
-                                           args.train_or_test, SPEED_TO_ADD, ped_features)
+                                           0, SPEED_TO_ADD, ped_features)
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
             g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(
@@ -317,6 +319,11 @@ def check_accuracy(
             )
             ade = cal_ade(pred_traj_gt, pred_traj_fake)
             fde = cal_fde(pred_traj_gt, pred_traj_fake)
+
+            last_pos = obs_traj[-1]
+            traj_for_speed_cal = torch.cat([last_pos.unsqueeze(dim=0), pred_traj_fake], dim=0)
+            msae = cal_msae(pred_ped_speed, traj_for_speed_cal)
+            fse = cal_fse(pred_ped_speed, pred_traj_fake)
 
             traj_real = torch.cat([obs_traj, pred_traj_gt], dim=0)
             traj_real_rel = torch.cat([obs_traj_rel, pred_traj_gt_rel], dim=0)
@@ -334,6 +341,8 @@ def check_accuracy(
             g_l2_losses_rel.append(g_l2_loss_rel.item())
             disp_error.append(ade.item())
             f_disp_error.append(fde.item())
+            mean_speed_disp_error.append(msae.item())
+            final_speed_disp_error.append(fse.item())
 
             mask_sum += (pred_traj_gt.size(1) * PRED_LEN)
             total_traj += pred_traj_gt.size(1)
@@ -343,9 +352,10 @@ def check_accuracy(
     metrics['d_loss'] = sum(d_losses) / len(d_losses)
     metrics['g_l2_loss_abs'] = sum(g_l2_losses_abs) / mask_sum
     metrics['g_l2_loss_rel'] = sum(g_l2_losses_rel) / mask_sum
-
     metrics['ade'] = sum(disp_error) / (total_traj * PRED_LEN)
     metrics['fde'] = sum(f_disp_error) / total_traj
+    metrics['msae'] = sum(mean_speed_disp_error) / (total_traj * PRED_LEN)
+    metrics['fse'] = sum(final_speed_disp_error) / total_traj
 
     generator.train()
     return metrics
@@ -367,6 +377,32 @@ def cal_ade(pred_traj_gt, pred_traj_fake):
 def cal_fde(pred_traj_gt, pred_traj_fake):
     fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])
     return fde
+
+
+def cal_msae(real_speed, fake_traj):
+    fake_output_speed = fake_speed(fake_traj)
+    real_speed = real_speed.permute(1, 0, 2)
+    msae = mean_speed_error(real_speed, fake_output_speed)
+    return msae
+
+
+def fake_speed(fake_traj):
+    output_speed = []
+    for a, b in zip(fake_traj[:, :], fake_traj[1:, :]):
+        dist = torch.pairwise_distance(a, b)
+        speed = dist/0.4
+        output_speed.append(speed.view(1, -1))
+    output_fake_speed = torch.cat(output_speed, dim=0).unsqueeze(dim=2).permute(1, 0, 2)
+    return output_fake_speed
+
+
+def cal_fse(real_speed, fake_traj):
+    last_two_traj_info = fake_traj[-2:, :, :]
+    fake_output_speed = fake_speed(last_two_traj_info)
+    real_speed = real_speed.permute(1, 0, 2)
+    fse = final_speed_error(real_speed, fake_output_speed)
+    return fse
+
 
 
 if __name__ == '__main__':

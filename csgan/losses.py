@@ -22,11 +22,14 @@ def gan_d_loss(scores_real, scores_fake):
     return loss_real + loss_fake
 
 
-def l2_loss(pred_traj, pred_traj_gt, mode='average'):
+def l2_loss(pred_traj, pred_traj_gt, loss_mask, random=0, mode='average'):
     seq_len, batch, _ = pred_traj.size()
-    loss = ((pred_traj_gt.permute(1, 0, 2) - pred_traj.permute(1, 0, 2))**2)
+    loss = (loss_mask.unsqueeze(dim=2) *
+            (pred_traj_gt.permute(1, 0, 2) - pred_traj.permute(1, 0, 2))**2)
     if mode == 'sum':
         return torch.sum(loss)
+    elif mode == 'average':
+        return torch.sum(loss) / torch.numel(loss_mask.data)
     elif mode == 'raw':
         return loss.sum(dim=2).sum(dim=1)
 
@@ -73,3 +76,10 @@ def final_speed_error(real_speed, fake_speed):
     speed_loss = torch.abs(real_speed - fake_speed)
     add_loss_1 = torch.sum(speed_loss)
     return add_loss_1
+
+def relative_to_abs(rel_traj, start_pos):
+    rel_traj = rel_traj.permute(1, 0, 2)
+    displacement = torch.cumsum(rel_traj, dim=1)
+    start_pos = torch.unsqueeze(start_pos, dim=1)
+    abs_traj = displacement + start_pos
+    return abs_traj.permute(1, 0, 2)

@@ -4,7 +4,7 @@ import matplotlib.animation as animation
 import pickle
 from csgan.constants import *
 
-with open('scripts\obj.pkl', 'rb') as f:
+with open('scripts\oResultTrajectories.pkl', 'rb') as f:
     a = pickle.load(f)
     for b in a:
         c = SEQUENCE_TO_VISUALIZE

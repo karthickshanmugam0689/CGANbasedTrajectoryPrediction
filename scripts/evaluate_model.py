@@ -58,7 +58,7 @@ def evaluate(loader, generator, num_samples):
             fde_outer.append(fde_sum)
         ade = sum(ade_outer) / (total_traj * PRED_LEN)
         fde = sum(fde_outer) / (total_traj)
-        with open('obj.pkl', 'wb') as f:
+        with open('ResultTrajectories.pkl', 'wb') as f:
             pickle.dump(simulated_output, f, pickle.HIGHEST_PROTOCOL)
         return ade, fde
 

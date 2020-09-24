@@ -1,17 +1,16 @@
 import gc
 from collections import defaultdict
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from csgan.constants import *
+from constants import *
 
-from csgan.data.trajectories import data_loader
-from csgan.losses import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, final_speed_error
-from csgan.losses import displacement_error, final_displacement_error
+from trajectories import data_loader
+from losses import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, final_speed_error
+from losses import displacement_error, final_displacement_error
 
-from csgan.models import TrajectoryGenerator, TrajectoryDiscriminator
-from csgan.losses import relative_to_abs
+from models import TrajectoryGenerator, TrajectoryDiscriminator
+from losses import relative_to_abs
 
 torch.backends.cudnn.benchmark = True
 
@@ -71,7 +70,7 @@ def main():
         'g_best_state': None,
         'd_best_state': None
     }
-    ade_list, fde_list, avg_speed_error = [], [], []
+    ade_list, fde_list, avg_speed_error, f_speed_error = [], [], [], []
     while epoch < NUM_EPOCHS:
         gc.collect()
         d_steps_left, g_steps_left = D_STEPS, G_STEPS
@@ -90,7 +89,6 @@ def main():
 
             if t > 0 and t % CHECKPOINT_EVERY == 0:
 
-                # Maybe save loss
                 print('t = {} / {}'.format(t + 1, NUM_ITERATIONS))
                 for k, v in sorted(losses_d.items()):
                     print('  [D] {}: {:.3f}'.format(k, v))
@@ -110,6 +108,7 @@ def main():
                 ade_list.append(metrics_val['ade'])
                 fde_list.append(metrics_val['fde'])
                 avg_speed_error.append(metrics_val['msae'])
+                f_speed_error.append(metrics_val['fse'])
 
                 if metrics_val.get('ade') == min(ade_list) or metrics_val['ade'] < min(ade_list):
                     print('New low for avg_disp_error')
@@ -117,6 +116,8 @@ def main():
                     print('New low for final_disp_error')
                 if metrics_val.get('msae') == min(avg_speed_error) or metrics_val['msae'] < min(avg_speed_error):
                     print('New low for avg_speed_error')
+                if metrics_val.get('fse') == min(f_speed_error) or metrics_val['fse'] < min(f_speed_error):
+                    print('New low for final_speed_error')
 
                 checkpoint['g_state'] = generator.state_dict()
                 checkpoint['g_optim_state'] = optimizer_g.state_dict()
@@ -143,7 +144,7 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
     loss = torch.zeros(1).to(pred_traj_gt)
 
     generator_out, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
-                              pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+                                 pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -185,7 +186,7 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
 
     for _ in range(BEST_K):
         generator_out, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
-                                  TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+                                     TRAIN_METRIC, SPEED_TO_ADD, ped_features)
 
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -242,10 +243,11 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn, limit=False):
                 batch = [tensor.cuda() for tensor in batch]
             else:
                 batch = [tensor for tensor in batch]
-            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, ped_features) = batch
+            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed,
+             pred_ped_speed, ped_features) = batch
 
-            pred_traj_fake_rel, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
-                                           TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+            pred_traj_fake_rel, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
+                                              pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
             loss_mask = loss_mask[:, OBS_LEN:]
 
@@ -259,7 +261,7 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn, limit=False):
             last_pos = obs_traj[-1]
             traj_for_speed_cal = torch.cat([last_pos.unsqueeze(dim=0), pred_traj_fake], dim=0)
             msae = cal_msae(pred_ped_speed, traj_for_speed_cal)
-            fse = cal_fse(pred_ped_speed, pred_traj_fake)
+            fse = cal_fse(pred_ped_speed[-1], pred_traj_fake)
 
             traj_real = torch.cat([obs_traj, pred_traj_gt], dim=0)
             traj_real_rel = torch.cat([obs_traj_rel, pred_traj_gt_rel], dim=0)
@@ -324,7 +326,7 @@ def fake_speed(fake_traj):
     output_speed = []
     for a, b in zip(fake_traj[:, :], fake_traj[1:, :]):
         dist = torch.pairwise_distance(a, b)
-        speed = dist/0.4
+        speed = dist / 0.4
         output_speed.append(speed.view(1, -1))
     output_fake_speed = torch.cat(output_speed, dim=0).unsqueeze(dim=2).permute(1, 0, 2)
     return output_fake_speed
@@ -333,8 +335,7 @@ def fake_speed(fake_traj):
 def cal_fse(real_speed, fake_traj):
     last_two_traj_info = fake_traj[-2:, :, :]
     fake_output_speed = fake_speed(last_two_traj_info)
-    real_speed = real_speed.permute(1, 0, 2)
-    fse = final_speed_error(real_speed, fake_output_speed)
+    fse = final_speed_error(real_speed.unsqueeze(dim=2), fake_output_speed)
     return fse
 
 

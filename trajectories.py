@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 import torch
 from torch.utils.data import Dataset
-from csgan.constants import *
+from constants import *
 
 logger = logging.getLogger(__name__)
 

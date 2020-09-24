@@ -1,6 +1,5 @@
 import torch
 import random
-from csgan.constants import *
 
 
 def bce_loss(input, target):

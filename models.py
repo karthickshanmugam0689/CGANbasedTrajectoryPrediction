@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from csgan.constants import *
+from constants import *
 import math
-from csgan.losses import relative_to_abs
+from losses import relative_to_abs
 
 
 def make_mlp(dim_list, activation='leakyrelu', batch_norm=True, dropout=0):
@@ -18,14 +18,6 @@ def make_mlp(dim_list, activation='leakyrelu', batch_norm=True, dropout=0):
         if dropout > 0:
             layers.append(nn.Dropout(p=dropout))
     return nn.Sequential(*layers)
-
-
-def get_noise(shape, noise_type):
-    if noise_type == 'gaussian':
-        return torch.randn(*shape)
-    elif noise_type == 'uniform':
-        return torch.rand(*shape).sub_(0.5).mul_(2.0)
-    raise ValueError('Unrecognized noise type "%s"' % noise_type)
 
 
 class Encoder(nn.Module):
@@ -45,7 +37,7 @@ class Encoder(nn.Module):
         else:
             c_s = torch.zeros(self.num_layers, batch, self.h_dim)
             h_s = torch.zeros(self.num_layers, batch, self.h_dim)
-        return (c_s, h_s)
+        return c_s, h_s
 
     def forward(self, obs_traj, obs_ped_speed):
         batch = obs_traj.size(1)
@@ -107,7 +99,7 @@ class Decoder(nn.Module):
 
             if DECODER_TIMESTEP_POOLING:
                 decoder_h_state = state_tuple[0].squeeze(dim=0)
-                sspm = self.social_speed_pooling(decoder_h_state, seq_start_end, train_or_test, speed_to_add, "decoder", last_pos=curr_pos, speed=speed)
+                sspm = self.social_speed_pooling(decoder_h_state, seq_start_end, train_or_test, speed_to_add, "decoder", curr_pos, speed)
                 decoder_h_state = self.mlp(torch.cat([decoder_h_state, sspm], dim=1))
                 state_tuple = (decoder_h_state.unsqueeze(dim=0), state_tuple[1])
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
@@ -118,6 +110,7 @@ class Decoder(nn.Module):
 
 
 class SocialSpeedPoolingModule(nn.Module):
+    'This pooling module takes the speed of the pedestrians approaching into account'
     def __init__(self):
         super(SocialSpeedPoolingModule, self).__init__()
         self.h_dim = H_DIM
@@ -128,8 +121,7 @@ class SocialSpeedPoolingModule(nn.Module):
         self.mlp_pre_pool = make_mlp(mlp_input, activation='leakyrelu', dropout=DROPOUT)
         self.pos_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
 
-    def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, encOrDec, ped_features,
-                last_pos=None, speed=None):
+    def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, encOrDec, last_pos, speed, ped_features=None):
         pool_h = []
         for _, (start, end) in enumerate(seq_start_end):
             start = start.item()
@@ -222,52 +214,30 @@ class TrajectoryGenerator(nn.Module):
 
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation='leakyrelu', dropout=self.dropout)
 
-    def add_noise(self, _input, seq_start_end, user_noise=None):
-        if not self.noise_dim:
-            return _input
-
-        noise_shape = (_input.size(0),) + self.noise_dim
-
-        if user_noise is not None:
-            z_decoder = user_noise
-        else:
-            z_decoder = get_noise(noise_shape, NOISE_TYPE)
-
-        if NOISE_MIX_TYPE == 'global':
-            _list = []
-            for idx, (start, end) in enumerate(seq_start_end):
-                start = start.item()
-                end = end.item()
-                _vec = z_decoder[idx].view(1, -1)
-                _to_cat = _vec.repeat(end - start, 1)
-                _list.append(torch.cat([_input[start:end], _to_cat], dim=1))
-            decoder_h = torch.cat(_list, dim=0)
-            return decoder_h
-
-        decoder_h = torch.cat([_input, z_decoder], dim=1)
-
-        return decoder_h
-
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj, train_or_test,
                 speed_to_add, ped_features, user_noise=None):
         batch = obs_traj_rel.size(1)
         final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
         if POOLING_TYPE:
-            sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add, "encoder",
-                                             ped_features, last_pos=obs_traj[-1], speed=pred_ped_speed[0])
+            sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add, "encoder", obs_traj[-1], pred_ped_speed[0],
+                                             ped_features=ped_features)
             mlp_decoder_context_input = torch.cat([final_encoder_h, sspm], dim=1)
         else:
-            mlp_decoder_context_input = final_encoder_h.view(-1, self.h_dim)
+            mlp_decoder_context_input = final_encoder_h
         mlp_input = self.mlp_decoder_context(mlp_decoder_context_input)
-
-        decoder_h = self.add_noise(mlp_input, seq_start_end, user_noise=user_noise)
+        batch_noise_dim = (batch, ) + NOISE_DIM
+        if USE_GPU:
+            noise = torch.randn(*batch_noise_dim).cuda()
+        else:
+            noise = torch.randn(*batch_noise_dim)
+        decoder_h = torch.cat([mlp_input, noise], dim=1).unsqueeze(dim=0)
 
         if USE_GPU:
             decoder_c = torch.zeros(NUM_LAYERS, batch, self.h_dim).cuda()
         else:
             decoder_c = torch.zeros(NUM_LAYERS, batch, self.h_dim)
 
-        state_tuple = (decoder_h.unsqueeze(dim=0), decoder_c)
+        state_tuple = (decoder_h, decoder_c)
 
         decoder_out = self.decoder(
             obs_traj[-1],

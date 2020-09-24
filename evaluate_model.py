@@ -1,12 +1,12 @@
 import pickle
-
 import torch
+import math
 
-from csgan.data.trajectories import data_loader
-from csgan.models import TrajectoryGenerator
-from csgan.losses import displacement_error, final_displacement_error
-from csgan.losses import relative_to_abs
-from csgan.constants import *
+from trajectories import data_loader
+from models import TrajectoryGenerator
+from losses import displacement_error, final_displacement_error
+from losses import relative_to_abs
+from constants import *
 
 
 def evaluate_helper(error, seq_start_end):

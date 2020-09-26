@@ -118,6 +118,10 @@ class TrajectoryDataset(Dataset):
             for frame in frames:
                 frame_data.append(data[frame == data[:, 0], :])
             num_sequences = int(math.ceil((len(frames) - self.seq_len + 1)))
+            # Uncomment the below lines to test the max and min speeds available in the test datasets.
+            # This value is multiplied with the user speed from 0 to 1 - thus reflecting 1 as max speed and 0 as min speed
+            if self.train_or_test == 1:
+                min, max = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
             for idx in range(0, num_sequences + 1):
                 curr_seq_data = np.concatenate(
                     frame_data[idx:idx + self.seq_len], axis=0)
@@ -172,6 +176,8 @@ class TrajectoryDataset(Dataset):
                     ped_speed_feature = _curr_ped_abs_speed[:num_peds_considered]
 
                     # DISTANCE, POSITION, SPEED FEATURE CONCAT EXTRACTION
+                    # Calculating the nearby pedestrian distance and speed as a preprocessing step to increase the speed
+                    # of model run
                     max_ped_feature = np.zeros((num_peds_considered, 57, 3))
                     last_pos_info = ped_seq[:, :, self.obs_len - 1]
                     next_pos_speed = ped_speed_feature[:, self.obs_len]

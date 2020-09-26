@@ -5,7 +5,19 @@ TRAIN_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/
 VAL_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/val'
 TEST_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/test'
 CHECKPOINT_NAME = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/Checkpoints/ETH/model_checkpoint.pt'
-NUM_SAMPLE_CHECK = 5000
+
+# DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
+ETH = 1
+UNIV = 0
+ZARA1 = 0
+ZARA2 = 0
+HOTEL = 0
+ETH_MAX_SPEED = 3.902
+HOTEL_MAX_SPEED = 3.902
+UNIV_MAX_SPEED = 3.902
+ZARA1_MAX_SPEED = 3.902
+ZARA2_MAX_SPEED = 3.902
+
 
 # PYTORCH DATA LOADER OPTIONS
 NUM_WORKERS = 4
@@ -16,9 +28,6 @@ ACTIVATION = 'leakyrelu'
 # ENCODER DECODER HIDDEN DIMENSION OPTIONS
 H_DIM = 64
 
-# NOISE OPTIONS
-NOISE_TYPE = 'gaussian'
-NOISE_MIX_TYPE = 'ped'
 
 # HYPER PARAMETERS OPTIONS
 G_LEARNING_RATE, D_LEARNING_RATE = 1e-3, 1e-3
@@ -40,7 +49,7 @@ POOLING_TYPE = True
 # SPEED CONTROL FLAGS
 ADD_SPEED_EVERY_FRAME = True
 SPEED_TO_ADD = 0.1
-STOP_PED = False
+STOP_PED = True
 CONSTANT_SPEED_FOR_ALL_PED = False
 ADD_SPEED_PARTICULAR_FRAME = False
 FRAMES_TO_ADD_SPEED = []  # Provide a value between 0 to length of (predicted traj-1)
@@ -56,5 +65,4 @@ NOISE = True
 TEST_METRIC = 1
 TRAIN_METRIC = 0
 
-# Visualizing for number of pedestirans
-SEQUENCE_TO_VISUALIZE = (0, 2)
+NUM_SAMPLE_CHECK = 5000

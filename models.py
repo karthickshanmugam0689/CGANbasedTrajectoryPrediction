@@ -54,6 +54,10 @@ def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 
+def inverseSigmoid(x):
+    return math.log(x / (1 - x))
+
+
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
@@ -99,7 +103,8 @@ class Decoder(nn.Module):
 
             if DECODER_TIMESTEP_POOLING:
                 decoder_h_state = state_tuple[0].squeeze(dim=0)
-                sspm = self.social_speed_pooling(decoder_h_state, seq_start_end, train_or_test, speed_to_add, "decoder", curr_pos, speed)
+                sspm = self.social_speed_pooling(decoder_h_state, seq_start_end, train_or_test, speed_to_add,
+                                                 "decoder", curr_pos, speed)
                 decoder_h_state = self.mlp(torch.cat([decoder_h_state, sspm], dim=1))
                 state_tuple = (decoder_h_state.unsqueeze(dim=0), state_tuple[1])
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
@@ -110,7 +115,7 @@ class Decoder(nn.Module):
 
 
 class SocialSpeedPoolingModule(nn.Module):
-    'This pooling module takes the speed of the pedestrians approaching into account'
+    """The pooling module takes the speed of the pedestrians each other approaching into account"""
     def __init__(self):
         super(SocialSpeedPoolingModule, self).__init__()
         self.h_dim = H_DIM
@@ -164,27 +169,35 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, id=None):
     for _, (start, end) in enumerate(seq_start_end):
         start = start.item()
         end = end.item()
-        speed_to_add = SPEED_TO_ADD
+        if ETH:
+            speed_to_add = ETH_MAX_SPEED * SPEED_TO_ADD
+        if HOTEL:
+            speed_to_add = HOTEL_MAX_SPEED * SPEED_TO_ADD
+        if UNIV:
+            speed_to_add = UNIV_MAX_SPEED * SPEED_TO_ADD
+        if ZARA1:
+            speed_to_add = ZARA1_MAX_SPEED * SPEED_TO_ADD
+        if ZARA2:
+            speed_to_add = ZARA2_MAX_SPEED * SPEED_TO_ADD
+
         if ADD_SPEED_EVERY_FRAME:
             # To add an additional speed for each pedestrain and every frame
             for a in range(start, end):
-                if pred_traj_first_speed[a] + speed_to_add < 1:
-                    pred_traj_first_speed[a] = sigmoid(pred_traj_first_speed[a] + speed_to_add)
+                current_speed = inverseSigmoid(pred_traj_first_speed[a])
+                if sigmoid(current_speed + speed_to_add) < 1:
+                    pred_traj_first_speed[a] = sigmoid(current_speed + speed_to_add)
                 else:
                     pred_traj_first_speed[a] = MAX_SPEED
-            break
-        if STOP_PED:
+        elif STOP_PED:
             # To stop all pedestrians
             speed_to_add = 0
             for a in range(start, end):
                 pred_traj_first_speed[a] = sigmoid(speed_to_add)
-            break
-        if CONSTANT_SPEED_FOR_ALL_PED:
+        elif CONSTANT_SPEED_FOR_ALL_PED:
             # To make all pedestrians travel at same and constant speed throughout
             for a in range(start, end):
                 pred_traj_first_speed[a] = sigmoid(speed_to_add)
-            break
-        if ADD_SPEED_PARTICULAR_FRAME and len(FRAMES_TO_ADD_SPEED) > 0:
+        elif ADD_SPEED_PARTICULAR_FRAME and len(FRAMES_TO_ADD_SPEED) > 0:
             # Add speed to particular frame for all pedestrian
             sorted_frames = FRAMES_TO_ADD_SPEED.sort()
             for frames in sorted_frames:
@@ -193,7 +206,7 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, id=None):
                         pred_traj_first_speed[a] = pred_traj_first_speed[a] + sigmoid(speed_to_add)
                 else:
                     pred_traj_first_speed[a] = pred_traj_first_speed[a]
-            break
+
     return pred_traj_first_speed.view(-1, 1)
 
 

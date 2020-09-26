@@ -78,7 +78,7 @@ class Decoder(nn.Module):
         if train_or_test == 0:
             last_pos_speed = torch.cat([last_pos_rel, pred_ped_speed[0, :, :]], dim=1)
         else:
-            next_speed = speed_control(pred_ped_speed[0, :, :], 0, seq_start_end)
+            next_speed = speed_control(pred_ped_speed[0, :, :], SPEED_TO_ADD, seq_start_end)
             last_pos_speed = torch.cat([last_pos_rel, next_speed], dim=1)
         decoder_input = self.spatial_embedding(last_pos_speed)
         decoder_input = decoder_input.view(1, batch, self.embedding_dim)
@@ -131,10 +131,13 @@ class SocialSpeedPoolingModule(nn.Module):
             repeat_hstate = curr_hidden_ped.repeat(num_ped, 1).view(num_ped, num_ped, -1)
 
             if encOrDec == "encoder":
-                feature = ped_features[start:end, 0:num_ped, :]
-                if train_or_test == 1:
-                    speed = speed_control(feature[-1], SPEED_TO_ADD, seq_start_end)
-                    feature = torch.cat([feature[0:2], speed[start:end]], dim=1)
+                if train_or_test == 0:
+                    social_features_with_speed = ped_features[start:end, 0:num_ped, :].contiguous().view(-1, 3)
+                else:
+                    social_features = ped_features[start:end, 0:num_ped, :2].contiguous().view(-1, 2)
+                    social_features_with_speed = torch.cat([social_features,
+                                                            speed[start:end].view(-1, 1).repeat(num_ped, 1)], dim=1)
+                    a = social_features_with_speed.view(num_ped, num_ped, 3)
             else:
                 feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
                 if train_or_test == 1:
@@ -143,10 +146,10 @@ class SocialSpeedPoolingModule(nn.Module):
                 curr_end_pos_1 = feature.repeat(num_ped, 1)
                 curr_end_pos_2 = feature.unsqueeze(dim=1).repeat(1, num_ped, 1).view(-1, 3)
                 social_features = curr_end_pos_1[:, :2] - curr_end_pos_2[:, :2]
-                feature = torch.cat([social_features, curr_end_pos_1[:, 2].view(-1, 1)], dim=1)
+                social_features_with_speed = torch.cat([social_features, curr_end_pos_1[:, 2].view(-1, 1)], dim=1)
 
             # POSITION SPEED Pooling
-            position_feature_embedding = self.pos_embedding(feature.contiguous().view(-1, 3))
+            position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 3))
             pos_mlp_input = torch.cat([repeat_hstate.view(-1, self.h_dim), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
             pos_attn_h = self.mlp_pre_pool(pos_mlp_input)
             curr_pool_h = pos_attn_h.view(num_ped, num_ped, -1).max(1)[0]
@@ -166,18 +169,21 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, id=None):
             # To add an additional speed for each pedestrain and every frame
             for a in range(start, end):
                 if pred_traj_first_speed[a] + speed_to_add < 1:
-                    pred_traj_first_speed[a] = pred_traj_first_speed[a] + sigmoid(speed_to_add)
+                    pred_traj_first_speed[a] = sigmoid(pred_traj_first_speed[a] + speed_to_add)
                 else:
                     pred_traj_first_speed[a] = MAX_SPEED
+            break
         if STOP_PED:
             # To stop all pedestrians
             speed_to_add = 0
             for a in range(start, end):
                 pred_traj_first_speed[a] = sigmoid(speed_to_add)
+            break
         if CONSTANT_SPEED_FOR_ALL_PED:
             # To make all pedestrians travel at same and constant speed throughout
             for a in range(start, end):
                 pred_traj_first_speed[a] = sigmoid(speed_to_add)
+            break
         if ADD_SPEED_PARTICULAR_FRAME and len(FRAMES_TO_ADD_SPEED) > 0:
             # Add speed to particular frame for all pedestrian
             sorted_frames = FRAMES_TO_ADD_SPEED.sort()
@@ -187,8 +193,8 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, id=None):
                         pred_traj_first_speed[a] = pred_traj_first_speed[a] + sigmoid(speed_to_add)
                 else:
                     pred_traj_first_speed[a] = pred_traj_first_speed[a]
-
-    return pred_traj_first_speed
+            break
+    return pred_traj_first_speed.view(-1, 1)
 
 
 class TrajectoryGenerator(nn.Module):
@@ -219,8 +225,13 @@ class TrajectoryGenerator(nn.Module):
         batch = obs_traj_rel.size(1)
         final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
         if POOLING_TYPE:
-            sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add, "encoder", obs_traj[-1], pred_ped_speed[0],
-                                             ped_features=ped_features)
+            if train_or_test == 1:
+                simulated_ped_speed = speed_control(pred_ped_speed[0], SPEED_TO_ADD, seq_start_end)
+                next_speed = simulated_ped_speed
+            else:
+                next_speed = pred_ped_speed[0]
+            sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add,
+                                            "encoder", obs_traj[-1], next_speed, ped_features=ped_features)
             mlp_decoder_context_input = torch.cat([final_encoder_h, sspm], dim=1)
         else:
             mlp_decoder_context_input = final_encoder_h

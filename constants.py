@@ -53,7 +53,7 @@ PRINT_EVERY = 100
 NUM_SAMPLES = 1
 NUM_SAMPLES_CHECK = 5000
 NOISE = True
-TEST_METRIC = 0
+TEST_METRIC = 1
 TRAIN_METRIC = 0
 
 # Visualizing for number of pedestirans

@@ -3,7 +3,7 @@ OBS_LEN = 8
 PRED_LEN = 12
 TRAIN_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/train'
 VAL_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/val'
-TEST_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/test'
+TEST_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/zara2/test'
 CHECKPOINT_NAME = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/Checkpoints/ETH/model_checkpoint.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
@@ -13,10 +13,10 @@ ZARA1 = 0
 ZARA2 = 0
 HOTEL = 0
 ETH_MAX_SPEED = 3.902
-HOTEL_MAX_SPEED = 3.902
-UNIV_MAX_SPEED = 3.902
-ZARA1_MAX_SPEED = 3.902
-ZARA2_MAX_SPEED = 3.902
+HOTEL_MAX_SPEED = 2.3430
+UNIV_MAX_SPEED = 2.1665
+ZARA1_MAX_SPEED = 2.4873
+ZARA2_MAX_SPEED = 2.2537
 
 
 # PYTORCH DATA LOADER OPTIONS

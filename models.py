@@ -142,7 +142,6 @@ class SocialSpeedPoolingModule(nn.Module):
                     social_features = ped_features[start:end, 0:num_ped, :2].contiguous().view(-1, 2)
                     social_features_with_speed = torch.cat([social_features,
                                                             speed[start:end].view(-1, 1).repeat(num_ped, 1)], dim=1)
-                    a = social_features_with_speed.view(num_ped, num_ped, 3)
             else:
                 feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
                 if train_or_test == 1:

@@ -27,7 +27,8 @@ def data_loader(path, metric):
 
 
 def seq_collate(data):
-    (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed, pred_ped_abs_speed,
+    (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed,
+     pred_ped_abs_speed,
      ped_features) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
@@ -92,6 +93,7 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
 
 class TrajectoryDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
+
     def __init__(
             self, data_dir, metric=0
     ):
@@ -142,9 +144,9 @@ class TrajectoryDataset(Dataset):
                         continue
                     # for manhattan, change np.square to np.abs
                     curr_ped_x_axis_new = [0.0] + [np.square(t - s) for s, t in
-                                           zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
+                                                   zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
                     curr_ped_y_axis_new = [0.0] + [np.square(t - s) for s, t in
-                                           zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
+                                                   zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
 
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
@@ -176,27 +178,31 @@ class TrajectoryDataset(Dataset):
                     ped_speed_feature = _curr_ped_abs_speed[:num_peds_considered]
 
                     # DISTANCE, POSITION, SPEED FEATURE CONCAT EXTRACTION
-                    # Calculating the nearby pedestrian distance and speed as a preprocessing step to increase the speed
-                    # of model run
-                    max_ped_feature = np.zeros((num_peds_considered, 57, 3))
-                    last_pos_info = ped_seq[:, :, self.obs_len - 1]
-                    next_pos_speed = ped_speed_feature[:, self.obs_len]
-                    ped_wise_feature = []
-                    for a in last_pos_info:
-                        curr_ped_feature = []
-                        for b, speed in zip(last_pos_info, next_pos_speed):
-                            if np.array_equal(a, b):
-                                relative_pos = np.array([0.0, 0.0])
-                            else:
-                                relative_pos = b - a
-                            speed = speed
-                            concat = np.concatenate([relative_pos.reshape(1, 2), speed.reshape(1, 1)], axis=1)
-                            curr_ped_feature.append(concat)
-                        curr_ped_feature = np.concatenate(curr_ped_feature, axis=0)
-                        ped_wise_feature.append(np.expand_dims(curr_ped_feature, axis=0))
-                    ped_wise_feature = np.concatenate(ped_wise_feature, axis=0)
-                    max_ped_feature[0:num_peds_considered, 0:num_peds_considered, :] = \
-                        ped_wise_feature[0:num_peds_considered, :, :]
+                    max_ped_feature = np.zeros((num_peds_considered, 4, 3))
+                    ped_features = []
+                    for idx, _ in enumerate(range(self.obs_len)):
+                        last_pos_info = ped_seq[:, :, idx].reshape(num_peds_considered, 1, 2)
+                        next_pos_speed = ped_speed_feature[:, idx].reshape(num_peds_considered, 1, 1)
+                        ped_wise_feature = []
+                        for a in last_pos_info:  #1*2
+                            curr_ped_feature = []
+                            for b, speed in zip(last_pos_info, next_pos_speed):
+                                if np.array_equal(a, b):
+                                    continue
+                                else:
+                                    relative_pos = b - a
+                                    distance = np.linalg.norm(b - a)
+                                    speed = speed
+                                    concat = np.concatenate(
+                                        [relative_pos.reshape(1, 2), speed.reshape(1, 1), distance.reshape(1, 1)],
+                                        axis=1)
+                                    curr_ped_feature.append(concat)
+                            curr_ped_feature = np.concatenate(curr_ped_feature, axis=0)
+                            nearest_pedestrians = curr_ped_feature[curr_ped_feature[:, -1].argsort()]
+                            ped_wise_feature.append(np.expand_dims(nearest_pedestrians[:, :3], axis=0))
+                        ped_features.append(ped_wise_feature)
+                    ped_wise_feature = np.concatenate(ped_features, axis=0)
+                    max_ped_feature[0:num_peds_considered, 0:num_peds_considered - 1, :] = ped_wise_feature
                     features.append(max_ped_feature)
 
         self.num_seq = len(seq_list)

@@ -142,7 +142,6 @@ class SocialSpeedPoolingModule(nn.Module):
                     social_features = ped_features[start:end, 0:num_ped, :2].contiguous().view(-1, 2)
                     social_features_with_speed = torch.cat([social_features,
                                                             speed[start:end].view(-1, 1).repeat(num_ped, 1)], dim=1)
-                    a = social_features_with_speed.view(num_ped, num_ped, 3)
             else:
                 feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
                 if train_or_test == 1:
@@ -291,12 +290,42 @@ class TrajectoryGenerator(nn.Module):
         return pred_traj_fake_rel, outputs
 
 
+class EncoderDiscriminator(nn.Module):
+    def __init__(self):
+        super(EncoderDiscriminator, self).__init__()
+
+        self.h_dim = H_DIM_DIS
+        self.embedding_dim = EMBEDDING_DIM
+        self.spatial_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
+        self.num_layers = NUM_LAYERS
+        self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=DROPOUT)
+
+    def init_hidden(self, batch):
+        if USE_GPU:
+            c_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+            h_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+        else:
+            c_s = torch.zeros(self.num_layers, batch, self.h_dim)
+            h_s = torch.zeros(self.num_layers, batch, self.h_dim)
+        return c_s, h_s
+
+    def forward(self, obs_traj, obs_ped_speed):
+        batch = obs_traj.size(1)
+        embedding_input = torch.cat([obs_traj, obs_ped_speed], dim=2)
+        traj_speed_embedding = self.spatial_embedding(embedding_input.contiguous().view(-1, 3))
+        obs_traj_embedding = traj_speed_embedding.view(-1, batch, self.embedding_dim)
+        state_tuple = self.init_hidden(batch)
+        output, state = self.encoder(obs_traj_embedding, state_tuple)
+        final_h = state[0]
+        return final_h.squeeze(dim=0)
+
+
 class TrajectoryDiscriminator(nn.Module):
     def __init__(self):
         super(TrajectoryDiscriminator, self).__init__()
 
-        self.encoder = Encoder()
-        self.h_dim = H_DIM
+        self.encoder = EncoderDiscriminator()
+        self.h_dim = H_DIM_DIS
         self.mlp_dim = MLP_DIM
         self.dropout = DROPOUT
 

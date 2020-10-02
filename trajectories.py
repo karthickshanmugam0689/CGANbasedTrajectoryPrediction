@@ -120,8 +120,8 @@ class TrajectoryDataset(Dataset):
             num_sequences = int(math.ceil((len(frames) - self.seq_len + 1)))
             # Uncomment the below lines to test the max and min speeds available in the test datasets.
             # This value is multiplied with the user speed from 0 to 1 - thus reflecting 1 as max speed and 0 as min speed
-            if self.train_or_test == 1:
-                min, max = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
+            #if self.train_or_test == 1:
+            #    min, max = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
             for idx in range(0, num_sequences + 1):
                 curr_seq_data = np.concatenate(
                     frame_data[idx:idx + self.seq_len], axis=0)

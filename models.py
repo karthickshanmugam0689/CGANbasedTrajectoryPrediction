@@ -28,15 +28,15 @@ class Encoder(nn.Module):
         self.embedding_dim = EMBEDDING_DIM
         self.spatial_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
         self.num_layers = NUM_LAYERS
-        self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=DROPOUT)
+        self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=DROPOUT, bidirectional=True)
 
     def init_hidden(self, batch):
         if USE_GPU:
-            c_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
-            h_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+            c_s = torch.zeros(self.num_layers*2, batch, self.h_dim).cuda()
+            h_s = torch.zeros(self.num_layers*2, batch, self.h_dim).cuda()
         else:
-            c_s = torch.zeros(self.num_layers, batch, self.h_dim)
-            h_s = torch.zeros(self.num_layers, batch, self.h_dim)
+            c_s = torch.zeros(self.num_layers*2, batch, self.h_dim)
+            h_s = torch.zeros(self.num_layers*2, batch, self.h_dim)
         return c_s, h_s
 
     def forward(self, obs_traj, obs_ped_speed):
@@ -47,7 +47,7 @@ class Encoder(nn.Module):
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
         final_h = state[0]
-        return final_h.squeeze(dim=0)
+        return final_h.view(batch, self.h_dim*2)
 
 
 def sigmoid(x):
@@ -121,7 +121,7 @@ class SocialSpeedPoolingModule(nn.Module):
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
         self.bottleneck_dim = BOTTLENECK_DIM
-        mlp_input = [self.h_dim + self.embedding_dim, 512, self.bottleneck_dim]
+        mlp_input = [self.h_dim*2 + self.embedding_dim, 512, self.bottleneck_dim]
 
         self.mlp_pre_pool = make_mlp(mlp_input, activation='leakyrelu', dropout=DROPOUT)
         self.pos_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
@@ -154,7 +154,7 @@ class SocialSpeedPoolingModule(nn.Module):
 
             # POSITION SPEED Pooling
             position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 3))
-            pos_mlp_input = torch.cat([repeat_hstate.view(-1, self.h_dim), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
+            pos_mlp_input = torch.cat([repeat_hstate.view(-1, self.h_dim*2), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
             pos_attn_h = self.mlp_pre_pool(pos_mlp_input)
             curr_pool_h = pos_attn_h.view(num_ped, num_ped, -1).max(1)[0]
             pool_h.append(curr_pool_h)
@@ -228,7 +228,7 @@ class TrajectoryGenerator(nn.Module):
         else:
             output_dim = self.h_dim
 
-        mlp_decoder_context_dims = [self.h_dim + self.bottleneck_dim, self.mlp_dim, output_dim]
+        mlp_decoder_context_dims = [self.h_dim*2 + self.bottleneck_dim, self.mlp_dim, output_dim]
 
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation='leakyrelu', dropout=self.dropout)
 
@@ -290,12 +290,42 @@ class TrajectoryGenerator(nn.Module):
         return pred_traj_fake_rel, outputs
 
 
+class EncoderDiscriminator(nn.Module):
+    def __init__(self):
+        super(EncoderDiscriminator, self).__init__()
+
+        self.h_dim = H_DIM_DIS
+        self.embedding_dim = EMBEDDING_DIM
+        self.spatial_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
+        self.num_layers = NUM_LAYERS
+        self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=DROPOUT)
+
+    def init_hidden(self, batch):
+        if USE_GPU:
+            c_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+            h_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+        else:
+            c_s = torch.zeros(self.num_layers, batch, self.h_dim)
+            h_s = torch.zeros(self.num_layers, batch, self.h_dim)
+        return c_s, h_s
+
+    def forward(self, obs_traj, obs_ped_speed):
+        batch = obs_traj.size(1)
+        embedding_input = torch.cat([obs_traj, obs_ped_speed], dim=2)
+        traj_speed_embedding = self.spatial_embedding(embedding_input.contiguous().view(-1, 3))
+        obs_traj_embedding = traj_speed_embedding.view(-1, batch, self.embedding_dim)
+        state_tuple = self.init_hidden(batch)
+        output, state = self.encoder(obs_traj_embedding, state_tuple)
+        final_h = state[0]
+        return final_h.view(batch, self.h_dim)
+
+
 class TrajectoryDiscriminator(nn.Module):
     def __init__(self):
         super(TrajectoryDiscriminator, self).__init__()
 
-        self.encoder = Encoder()
-        self.h_dim = H_DIM
+        self.encoder = EncoderDiscriminator()
+        self.h_dim = H_DIM_DIS
         self.mlp_dim = MLP_DIM
         self.dropout = DROPOUT
 

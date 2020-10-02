@@ -1,10 +1,10 @@
 # DATASET OPTIONS
 OBS_LEN = 8
 PRED_LEN = 12
-TRAIN_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/train'
-VAL_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/eth/val'
-TEST_DATASET_PATH = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/datasets/zara2/test'
-CHECKPOINT_NAME = 'C:/Users/visha/MasterThesis/CGANbasedTrajectoryPrediction/Checkpoints/ETH/model_checkpoint.pt'
+TRAIN_DATASET_PATH = 'datasets/eth/train'
+VAL_DATASET_PATH = 'datasets/eth/val'
+TEST_DATASET_PATH = 'datasets/eth/test'
+CHECKPOINT_NAME = 'Checkpoints/ETH_NEW2/model_checkpoint.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
 ETH = 1
@@ -26,7 +26,8 @@ BATCH_NORM = False
 ACTIVATION = 'leakyrelu'
 
 # ENCODER DECODER HIDDEN DIMENSION OPTIONS
-H_DIM = 64
+H_DIM = 32
+H_DIM_DIS = 64
 
 
 # HYPER PARAMETERS OPTIONS

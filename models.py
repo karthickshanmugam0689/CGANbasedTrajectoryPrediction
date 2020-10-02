@@ -26,7 +26,7 @@ class Encoder(nn.Module):
 
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
-        self.spatial_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
+        self.spatial_embedding = nn.Sequential(nn.Linear(MAX_NEAREST_PED*5, 512), nn.LeakyReLU(), nn.Linear(512, self.embedding_dim))
         self.num_layers = NUM_LAYERS
         self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=DROPOUT)
 
@@ -39,10 +39,9 @@ class Encoder(nn.Module):
             h_s = torch.zeros(self.num_layers, batch, self.h_dim)
         return c_s, h_s
 
-    def forward(self, obs_traj, obs_ped_speed):
+    def forward(self, obs_traj):
         batch = obs_traj.size(1)
-        embedding_input = torch.cat([obs_traj, obs_ped_speed], dim=2)
-        traj_speed_embedding = self.spatial_embedding(embedding_input.contiguous().view(-1, 3))
+        traj_speed_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, MAX_NEAREST_PED*5))
         obs_traj_embedding = traj_speed_embedding.view(-1, batch, self.embedding_dim)
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
@@ -126,38 +125,28 @@ class SocialSpeedPoolingModule(nn.Module):
         self.mlp_pre_pool = make_mlp(mlp_input, activation='leakyrelu', dropout=DROPOUT)
         self.pos_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
 
-    def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, encOrDec, last_pos, speed, ped_features=None):
+    def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, end_pos, next_speed):
         pool_h = []
+
         for _, (start, end) in enumerate(seq_start_end):
             start = start.item()
             end = end.item()
             num_ped = end - start
-            curr_hidden_ped = h_states[start:end]
-            repeat_hstate = curr_hidden_ped.repeat(num_ped, 1).view(num_ped, num_ped, -1)
+            curr_hidden_ped = h_states.view(-1, self.h_dim)[start:end]
+            curr_hidden_1 = curr_hidden_ped.repeat(num_ped, 1)
 
-            if encOrDec == "encoder":
-                if train_or_test == 0:
-                    social_features_with_speed = ped_features[start:end, 0:num_ped, :].contiguous().view(-1, 3)
-                else:
-                    social_features = ped_features[start:end, 0:num_ped, :2].contiguous().view(-1, 2)
-                    social_features_with_speed = torch.cat([social_features,
-                                                            speed[start:end].view(-1, 1).repeat(num_ped, 1)], dim=1)
-            else:
-                feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
-                if train_or_test == 1:
-                    speed = speed_control(speed, SPEED_TO_ADD, seq_start_end)
-                    feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
-                curr_end_pos_1 = feature.repeat(num_ped, 1)
-                curr_end_pos_2 = feature.unsqueeze(dim=1).repeat(1, num_ped, 1).view(-1, 3)
-                social_features = curr_end_pos_1[:, :2] - curr_end_pos_2[:, :2]
-                social_features_with_speed = torch.cat([social_features, curr_end_pos_1[:, 2].view(-1, 1)], dim=1)
+            feature = torch.cat([end_pos[start:end], next_speed[start:end]], dim=1)
+            curr_end_pos_1 = feature.repeat(num_ped, 1)
+            curr_end_pos_2 = feature.unsqueeze(dim=1).repeat(1, num_ped, 1).view(-1, 3)
+            social_features = curr_end_pos_1[:, :2] - curr_end_pos_2[:, :2]
+            social_features_with_speed = torch.cat([social_features, curr_end_pos_1[:, 2].view(-1, 1)], dim=1)
 
-            # POSITION SPEED Pooling
             position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 3))
-            pos_mlp_input = torch.cat([repeat_hstate.view(-1, self.h_dim), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
+            pos_mlp_input = torch.cat([curr_hidden_1, position_feature_embedding], dim=1)
             pos_attn_h = self.mlp_pre_pool(pos_mlp_input)
-            curr_pool_h = pos_attn_h.view(num_ped, num_ped, -1).max(1)[0]
-            pool_h.append(curr_pool_h)
+            pos_attn_h = pos_attn_h.view(num_ped, num_ped, -1).max(1)[0]
+            pool_h.append(pos_attn_h)
+
         pool_h = torch.cat(pool_h, dim=0)
         return pool_h
 
@@ -235,16 +224,16 @@ class TrajectoryGenerator(nn.Module):
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj, train_or_test,
                 speed_to_add, ped_features, user_noise=None):
         batch = obs_traj_rel.size(1)
-        final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
+        final_encoder_h = self.encoder(ped_features)
         if POOLING_TYPE:
-            if train_or_test == 1:
-                simulated_ped_speed = speed_control(pred_ped_speed[0], SPEED_TO_ADD, seq_start_end)
-                next_speed = simulated_ped_speed
+            if train_or_test == 0:
+              end_speed_pos = pred_ped_speed[0, :, :]
             else:
-                next_speed = pred_ped_speed[0]
-            sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add,
-                                            "encoder", obs_traj[-1], next_speed, ped_features=ped_features)
-            mlp_decoder_context_input = torch.cat([final_encoder_h, sspm], dim=1)
+              end_speed_pos = speed_control(pred_ped_speed[0, :, :], 0, seq_start_end)
+            attn_pool = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add, obs_traj[-1, :, :], end_speed_pos)
+            # concatenating pooling module output with encoder output and speed embedding
+            mlp_decoder_context_input = torch.cat(
+                [final_encoder_h, attn_pool], dim=1)
         else:
             mlp_decoder_context_input = final_encoder_h
         mlp_input = self.mlp_decoder_context(mlp_decoder_context_input)

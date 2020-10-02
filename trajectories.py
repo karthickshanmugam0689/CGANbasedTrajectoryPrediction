@@ -43,7 +43,7 @@ def seq_collate(data):
     pred_ped_abs_speed = torch.cat(pred_ped_abs_speed, dim=0).permute(2, 0, 1)
     seq_start_end = torch.LongTensor(seq_start_end)
     loss_mask = torch.cat(loss_mask_list, dim=0)
-    ped_features = torch.cat(ped_features, dim=0)
+    ped_features = torch.cat(ped_features, dim=0).permute(1, 0, 2, 3)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, loss_mask, seq_start_end, obs_ped_abs_speed,
         pred_ped_abs_speed, ped_features
@@ -175,34 +175,43 @@ class TrajectoryDataset(Dataset):
                     seq_list.append(curr_seq[:num_peds_considered])
                     seq_list_rel.append(curr_seq_rel[:num_peds_considered])
                     ped_seq = curr_seq[:num_peds_considered]
+                    ped_seq_rel = curr_seq_rel[:num_peds_considered]
                     ped_speed_feature = _curr_ped_abs_speed[:num_peds_considered]
 
                     # DISTANCE, POSITION, SPEED FEATURE CONCAT EXTRACTION
-                    max_ped_feature = np.zeros((num_peds_considered, 4, 3))
+                    max_ped_feature = np.zeros((num_peds_considered, self.obs_len, MAX_NEAREST_PED, 5))
                     ped_features = []
                     for idx, _ in enumerate(range(self.obs_len)):
-                        last_pos_info = ped_seq[:, :, idx].reshape(num_peds_considered, 1, 2)
+                        pos_info = ped_seq[:, :, idx].reshape(num_peds_considered, 1, 2)
+                        rel_pos_info = ped_seq_rel[:, :, idx].reshape(num_peds_considered, 1, 2)
                         next_pos_speed = ped_speed_feature[:, idx].reshape(num_peds_considered, 1, 1)
                         ped_wise_feature = []
-                        for a in last_pos_info:  #1*2
+                        for a, c in zip(pos_info, rel_pos_info):  #8*2
                             curr_ped_feature = []
-                            for b, speed in zip(last_pos_info, next_pos_speed):
+                            for b, speed in zip(pos_info, next_pos_speed):
                                 if np.array_equal(a, b):
                                     continue
                                 else:
+                                    actual_rel_pos = c
                                     relative_pos = b - a
                                     distance = np.linalg.norm(b - a)
                                     speed = speed
                                     concat = np.concatenate(
-                                        [relative_pos.reshape(1, 2), speed.reshape(1, 1), distance.reshape(1, 1)],
+                                        [actual_rel_pos.reshape(1, 2), relative_pos.reshape(1, 2), speed.reshape(1, 1), distance.reshape(1, 1)],
                                         axis=1)
                                     curr_ped_feature.append(concat)
                             curr_ped_feature = np.concatenate(curr_ped_feature, axis=0)
                             nearest_pedestrians = curr_ped_feature[curr_ped_feature[:, -1].argsort()]
-                            ped_wise_feature.append(np.expand_dims(nearest_pedestrians[:, :3], axis=0))
+                            if nearest_pedestrians.shape[0] > MAX_NEAREST_PED:
+                                nearest_pedestrians = nearest_pedestrians[0:MAX_NEAREST_PED, :]
+                            else:
+                                nearest_pedestrians = nearest_pedestrians
+                            nearest_pedestrians = np.expand_dims(nearest_pedestrians, axis=0)
+                            ped_wise_feature.append(np.expand_dims(nearest_pedestrians[:, :, :5], axis=0))
+                        ped_wise_feature = np.concatenate(ped_wise_feature, axis=0)
                         ped_features.append(ped_wise_feature)
-                    ped_wise_feature = np.concatenate(ped_features, axis=0)
-                    max_ped_feature[0:num_peds_considered, 0:num_peds_considered - 1, :] = ped_wise_feature
+                    ped_features_in_curr_seq = np.concatenate(ped_features, axis=1)
+                    max_ped_feature[0:num_peds_considered, :, :ped_features_in_curr_seq.shape[2], :] = ped_features_in_curr_seq
                     features.append(max_ped_feature)
 
         self.num_seq = len(seq_list)

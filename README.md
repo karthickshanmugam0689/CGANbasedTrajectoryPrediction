@@ -3,11 +3,11 @@
 * This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
 * The model proposed in this project can be used to simulate trajectories at different speeds
 
-Pedestrian Simulation with Original Speed:
-![OriginalSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Actual%20Speed.gif)
+Pedestrian Simulation with Original Speed and Maximum speed:
+![OriginalSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Real%20and%20Simulated%20Traj%20-%20Max%20Speed.gif)
 
-The output plot below indicates the distance traveled by the pedestrian with increase in Speed
-![IncreasedSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Speed%200.4.gif)
+Pedestrian Simulation with Original Speed and No speed (Stop pedestrians):
+![IncreasedSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Real%20vs%20Simulated%20-%20Stop%20ped.gif)
 
 **To reproduce the project, run the following command:**
 

@@ -27,8 +27,8 @@ def data_loader(path, metric):
 
 
 def seq_collate(data):
-    (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed, pred_ped_abs_speed,
-     ped_features) = zip(*data)
+    (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed,
+     pred_ped_abs_speed, ped_features) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -66,6 +66,7 @@ def read_file(_path, delim='\t'):
 
 
 def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
+
     ped_speed = []
     for idx in range(0, num_sequences):
         curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)
@@ -92,15 +93,14 @@ def get_min_max_speed_labels(num_sequences, frame_data, seq_len, frames):
 
 class TrajectoryDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
+
     def __init__(
             self, data_dir, metric=0
     ):
         super(TrajectoryDataset, self).__init__()
 
         self.data_dir = data_dir
-        self.obs_len = OBS_LEN
-        self.pred_len = PRED_LEN
-        self.seq_len = OBS_LEN + PRED_LEN
+        SEQ_LEN = OBS_LEN + PRED_LEN
         self.train_or_test = metric
 
         all_files = os.listdir(self.data_dir)
@@ -117,20 +117,20 @@ class TrajectoryDataset(Dataset):
             frame_data = []
             for frame in frames:
                 frame_data.append(data[frame == data[:, 0], :])
-            num_sequences = int(math.ceil((len(frames) - self.seq_len + 1)))
+            num_sequences = int(math.ceil((len(frames) - SEQ_LEN + 1)))
             # Uncomment the below lines to test the max and min speeds available in the test datasets.
             # This value is multiplied with the user speed from 0 to 1 - thus reflecting 1 as max speed and 0 as min speed
-            if self.train_or_test == 1:
-                min, max = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
+            #if self.train_or_test == 1:
+            #    min, max = get_min_max_speed_labels(num_sequences, frame_data, self.seq_len, frames)
             for idx in range(0, num_sequences + 1):
                 curr_seq_data = np.concatenate(
-                    frame_data[idx:idx + self.seq_len], axis=0)
+                    frame_data[idx:idx + SEQ_LEN], axis=0)
 
                 peds_in_curr_seq = np.unique(curr_seq_data[:, 1])
-                curr_loss_mask = np.zeros((len(peds_in_curr_seq), self.seq_len))
-                curr_seq_rel = np.zeros((len(peds_in_curr_seq), 2, self.seq_len))
-                curr_seq = np.zeros((len(peds_in_curr_seq), 2, self.seq_len))
-                _curr_ped_abs_speed = np.zeros((len(peds_in_curr_seq), self.seq_len))
+                curr_loss_mask = np.zeros((len(peds_in_curr_seq), SEQ_LEN))
+                curr_seq_rel = np.zeros((len(peds_in_curr_seq), 2, SEQ_LEN))
+                curr_seq = np.zeros((len(peds_in_curr_seq), 2, SEQ_LEN))
+                _curr_ped_abs_speed = np.zeros((len(peds_in_curr_seq), SEQ_LEN))
                 num_peds_considered = 0
 
                 for _, ped_id in enumerate(peds_in_curr_seq):
@@ -138,13 +138,12 @@ class TrajectoryDataset(Dataset):
                     curr_ped_seq = np.around(curr_ped_seq, decimals=4)
                     pad_front = frames.index(curr_ped_seq[0, 0]) - idx
                     pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
-                    if pad_end - pad_front != self.seq_len:
+                    if pad_end - pad_front != SEQ_LEN:
                         continue
-                    # for manhattan, change np.square to np.abs
                     curr_ped_x_axis_new = [0.0] + [np.square(t - s) for s, t in
-                                           zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
+                                                   zip(curr_ped_seq[:, 2], curr_ped_seq[1:, 2])]
                     curr_ped_y_axis_new = [0.0] + [np.square(t - s) for s, t in
-                                           zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
+                                                   zip(curr_ped_seq[:, 3], curr_ped_seq[1:, 3])]
 
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
@@ -179,8 +178,8 @@ class TrajectoryDataset(Dataset):
                     # Calculating the nearby pedestrian distance and speed as a preprocessing step to increase the speed
                     # of model run
                     max_ped_feature = np.zeros((num_peds_considered, 57, 3))
-                    last_pos_info = ped_seq[:, :, self.obs_len - 1]
-                    next_pos_speed = ped_speed_feature[:, self.obs_len]
+                    last_pos_info = ped_seq[:, :, OBS_LEN - 1]
+                    next_pos_speed = ped_speed_feature[:, OBS_LEN]
                     ped_wise_feature = []
                     for a in last_pos_info:
                         curr_ped_feature = []

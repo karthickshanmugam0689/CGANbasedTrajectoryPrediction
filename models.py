@@ -21,23 +21,26 @@ def make_mlp(dim_list, activation='leakyrelu', batch_norm=True, dropout=0):
 
 
 class Encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, h_dim=64):
         super(Encoder, self).__init__()
 
-        self.h_dim = H_DIM
+        self.mlp_dim = MLP_DIM
+        self.h_dim = h_dim
         self.embedding_dim = EMBEDDING_DIM
-        self.spatial_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
         self.num_layers = NUM_LAYERS
-        self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=DROPOUT)
+
+        self.encoder = nn.LSTM(EMBEDDING_DIM, h_dim, NUM_LAYERS, dropout=DROPOUT)
+
+        self.spatial_embedding = nn.Sequential(nn.Linear(3, EMBEDDING_DIM * 2), nn.LeakyReLU(),
+                                               nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
 
     def init_hidden(self, batch):
-        if USE_GPU:
-            c_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
-            h_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+        if USE_GPU == 1:
+            c_s, r_s = torch.zeros(self.num_layers, batch, self.h_dim).cuda(), torch.zeros(self.num_layers, batch,
+                                                                                           self.h_dim).cuda()
         else:
-            c_s = torch.zeros(self.num_layers, batch, self.h_dim)
-            h_s = torch.zeros(self.num_layers, batch, self.h_dim)
-        return c_s, h_s
+            c_s, r_s = torch.zeros(self.num_layers, batch, self.h_dim), torch.zeros(self.num_layers, batch, self.h_dim)
+        return c_s, r_s
 
     def forward(self, obs_traj, obs_ped_speed):
         batch = obs_traj.size(1)
@@ -47,7 +50,7 @@ class Encoder(nn.Module):
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
         final_h = state[0]
-        return final_h.squeeze(dim=0)
+        return final_h
 
 
 def sigmoid(x):
@@ -61,20 +64,19 @@ def inverseSigmoid(x):
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
+
+        self.mlp_dim = MLP_DIM
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
-        self.dropout = DROPOUT
-        self.num_layers = NUM_LAYERS
-        self.mlp_dim = MLP_DIM
-        self.bottleneck_dim = BOTTLENECK_DIM
-        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, self.num_layers, dropout=self.dropout)
 
-        self.social_speed_pooling = SocialSpeedPoolingModule()
+        self.decoder = nn.LSTM(EMBEDDING_DIM, H_DIM, NUM_LAYERS, dropout=DROPOUT)
 
         mlp_dims = [H_DIM + BOTTLENECK_DIM, MLP_DIM, H_DIM]
-        self.mlp = make_mlp(mlp_dims, activation='relu', dropout=self.dropout)
-        self.spatial_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
-        self.hidden2pos = nn.Linear(self.h_dim, 2)
+        self.mlp = make_mlp(mlp_dims, activation=ACTIVATION, batch_norm=BATCH_NORM, dropout=DROPOUT)
+
+        self.spatial_embedding = nn.Sequential(nn.Linear(3, EMBEDDING_DIM * 2), nn.LeakyReLU(),
+                                               nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
+        self.hidden2pos = nn.Linear(H_DIM, 2)
 
     def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, speed_to_add, pred_ped_speed, train_or_test):
         batch = last_pos.size(0)
@@ -82,7 +84,7 @@ class Decoder(nn.Module):
         if train_or_test == 0:
             last_pos_speed = torch.cat([last_pos_rel, pred_ped_speed[0, :, :]], dim=1)
         else:
-            next_speed = speed_control(pred_ped_speed[0, :, :], SPEED_TO_ADD, seq_start_end)
+            next_speed = speed_control(pred_ped_speed[0, :, :], 0, seq_start_end)
             last_pos_speed = torch.cat([last_pos_rel, next_speed], dim=1)
         decoder_input = self.spatial_embedding(last_pos_speed)
         decoder_input = decoder_input.view(1, batch, self.embedding_dim)
@@ -91,22 +93,21 @@ class Decoder(nn.Module):
             output, state_tuple = self.decoder(decoder_input, state_tuple)
             rel_pos = self.hidden2pos(output.view(-1, self.h_dim))
             curr_pos = rel_pos + last_pos
-            if id+1 != PRED_LEN:
+            if id + 1 != PRED_LEN:
                 if train_or_test == 0:
-                    speed = pred_ped_speed[id+1, :, :]
+                    speed = pred_ped_speed[id + 1, :, :]
                 else:
-                    speed = speed_control(pred_ped_speed[id+1, :, :], SPEED_TO_ADD, seq_start_end, id=id)
-            embedding_input = rel_pos
-            decoder_input = torch.cat([embedding_input, speed], dim=1)
+                    speed = speed_control(pred_ped_speed[id + 1, :, :], 0, seq_start_end)
+            decoder_input = torch.cat([rel_pos, speed], dim=1)
             decoder_input = self.spatial_embedding(decoder_input)
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
-            if DECODER_TIMESTEP_POOLING:
-                decoder_h_state = state_tuple[0].squeeze(dim=0)
-                sspm = self.social_speed_pooling(decoder_h_state, seq_start_end, train_or_test, speed_to_add,
-                                                 "decoder", curr_pos, speed)
-                decoder_h_state = self.mlp(torch.cat([decoder_h_state, sspm], dim=1))
-                state_tuple = (decoder_h_state.unsqueeze(dim=0), state_tuple[1])
+            # EACH TIMESTEP POOLING
+            # pool_h = self.pool_net(state_tuple[0], seq_start_end, train_or_test, speed_to_add, curr_pos, speed)  # B, 32
+            # decoder_h = torch.cat([state_tuple[0].view(-1, self.h_dim), pool_h], dim=1)
+            # decoder_h = self.mlp(decoder_h)
+            # state_tuple = (decoder_h.unsqueeze(dim=0), state_tuple[1])
+
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
             last_pos = curr_pos
 
@@ -116,23 +117,29 @@ class Decoder(nn.Module):
 
 class SocialSpeedPoolingModule(nn.Module):
     """The pooling module takes the speed of the pedestrians each other approaching into account"""
+
     def __init__(self):
         super(SocialSpeedPoolingModule, self).__init__()
+        self.mlp_dim = MLP_DIM
         self.h_dim = H_DIM
-        self.embedding_dim = EMBEDDING_DIM
         self.bottleneck_dim = BOTTLENECK_DIM
-        mlp_input = [self.h_dim + self.embedding_dim, 512, self.bottleneck_dim]
+        self.embedding_dim = EMBEDDING_DIM
 
-        self.mlp_pre_pool = make_mlp(mlp_input, activation='leakyrelu', dropout=DROPOUT)
-        self.pos_embedding = nn.Sequential(nn.Linear(3, self.embedding_dim*2), nn.LeakyReLU(), nn.Linear(self.embedding_dim*2, self.embedding_dim))
+        mlp_pre_dim = self.embedding_dim + self.h_dim
+        mlp_pre_pool_dims = [mlp_pre_dim, 512, BOTTLENECK_DIM]
 
-    def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, encOrDec, last_pos, speed, ped_features=None):
+        self.pos_embedding = nn.Sequential(nn.Linear(3, EMBEDDING_DIM * 2), nn.LeakyReLU(),
+                                           nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
+        self.mlp_pre_pool = make_mlp(mlp_pre_pool_dims, activation='leakyrelu', batch_norm=BATCH_NORM, dropout=DROPOUT)
+
+    def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, encOrDec, last_pos, speed,
+                ped_features=None):
         pool_h = []
         for _, (start, end) in enumerate(seq_start_end):
             start = start.item()
             end = end.item()
             num_ped = end - start
-            curr_hidden_ped = h_states[start:end]
+            curr_hidden_ped = h_states.view(-1, self.h_dim)[start:end]
             repeat_hstate = curr_hidden_ped.repeat(num_ped, 1).view(num_ped, num_ped, -1)
 
             if encOrDec == "encoder":
@@ -154,7 +161,8 @@ class SocialSpeedPoolingModule(nn.Module):
 
             # POSITION SPEED Pooling
             position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 3))
-            pos_mlp_input = torch.cat([repeat_hstate.view(-1, self.h_dim), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
+            pos_mlp_input = torch.cat(
+                [repeat_hstate.view(-1, self.h_dim), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
             pos_attn_h = self.mlp_pre_pool(pos_mlp_input)
             curr_pool_h = pos_attn_h.view(num_ped, num_ped, -1).max(1)[0]
             pool_h.append(curr_pool_h)
@@ -168,25 +176,36 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, id=None):
     for _, (start, end) in enumerate(seq_start_end):
         start = start.item()
         end = end.item()
-        if ETH:
-            speed_to_add = ETH_MAX_SPEED * SPEED_TO_ADD
-        if HOTEL:
-            speed_to_add = HOTEL_MAX_SPEED * SPEED_TO_ADD
-        if UNIV:
-            speed_to_add = UNIV_MAX_SPEED * SPEED_TO_ADD
-        if ZARA1:
-            speed_to_add = ZARA1_MAX_SPEED * SPEED_TO_ADD
-        if ZARA2:
-            speed_to_add = ZARA2_MAX_SPEED * SPEED_TO_ADD
 
-        if ADD_SPEED_EVERY_FRAME:
+        if ADD_SPEED_EVERY_FRAME or ADD_SPEED_PARTICULAR_FRAME:
+            if ETH:
+                speed_to_add = ETH_MAX_SPEED * SPEED_TO_ADD
+            if HOTEL:
+                speed_to_add = HOTEL_MAX_SPEED * SPEED_TO_ADD
+            if UNIV:
+                speed_to_add = UNIV_MAX_SPEED * SPEED_TO_ADD
+            if ZARA1:
+                speed_to_add = ZARA1_MAX_SPEED * SPEED_TO_ADD
+            if ZARA2:
+                speed_to_add = ZARA2_MAX_SPEED * SPEED_TO_ADD
+
             # To add an additional speed for each pedestrain and every frame
-            for a in range(start, end):
-                current_speed = inverseSigmoid(pred_traj_first_speed[a])
-                if sigmoid(current_speed + speed_to_add) < 1:
-                    pred_traj_first_speed[a] = sigmoid(current_speed + speed_to_add)
-                else:
-                    pred_traj_first_speed[a] = MAX_SPEED
+            if ADD_SPEED_EVERY_FRAME:
+                for a in range(start, end):
+                    current_speed = inverseSigmoid(pred_traj_first_speed[a])
+                    if sigmoid(current_speed + speed_to_add) < 1:
+                        pred_traj_first_speed[a] = sigmoid(current_speed + speed_to_add)
+                    else:
+                        pred_traj_first_speed[a] = MAX_SPEED
+            elif ADD_SPEED_PARTICULAR_FRAME and len(FRAMES_TO_ADD_SPEED) > 0:
+                # Add speed to particular frame for all pedestrian
+                sorted_frames = FRAMES_TO_ADD_SPEED.sort()
+                for frames in sorted_frames:
+                    if id == frames and id != 0:
+                        for a in range(start, end):
+                            pred_traj_first_speed[a] = pred_traj_first_speed[a] + sigmoid(speed_to_add)
+                    else:
+                        pred_traj_first_speed[a] = pred_traj_first_speed[a]
         elif STOP_PED:
             # To stop all pedestrians
             speed_to_add = 0
@@ -195,42 +214,47 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, id=None):
         elif CONSTANT_SPEED_FOR_ALL_PED:
             # To make all pedestrians travel at same and constant speed throughout
             for a in range(start, end):
-                pred_traj_first_speed[a] = sigmoid(speed_to_add)
-        elif ADD_SPEED_PARTICULAR_FRAME and len(FRAMES_TO_ADD_SPEED) > 0:
-            # Add speed to particular frame for all pedestrian
-            sorted_frames = FRAMES_TO_ADD_SPEED.sort()
-            for frames in sorted_frames:
-                if id == frames and id != 0:
-                    for a in range(start, end):
-                        pred_traj_first_speed[a] = pred_traj_first_speed[a] + sigmoid(speed_to_add)
-                else:
-                    pred_traj_first_speed[a] = pred_traj_first_speed[a]
+                pred_traj_first_speed[a] = sigmoid(CONSTANT_SPEED)
 
     return pred_traj_first_speed.view(-1, 1)
-
 
 class TrajectoryGenerator(nn.Module):
     def __init__(self):
         super(TrajectoryGenerator, self).__init__()
 
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-        self.social_speed_pooling = SocialSpeedPoolingModule()
+        self.mlp_dim = MLP_DIM
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
-        self.bottleneck_dim = BOTTLENECK_DIM
-        self.mlp_dim = MLP_DIM
         self.noise_dim = NOISE_DIM
-        self.dropout = DROPOUT
+        self.num_layers = NUM_LAYERS
+        self.bottleneck_dim = BOTTLENECK_DIM
 
-        if NOISE:
-            output_dim = self.h_dim - self.noise_dim[0]
+        self.encoder = Encoder(h_dim=H_DIM)
+        self.decoder = Decoder()
+        self.social_speed_pooling = SocialSpeedPoolingModule()
+
+        self.noise_first_dim = NOISE_DIM[0]
+
+        if POOLING_TYPE:
+            mlp_decoder_context_dims = [H_DIM + BOTTLENECK_DIM, MLP_DIM, H_DIM - self.noise_first_dim]
         else:
-            output_dim = self.h_dim
+            mlp_decoder_context_dims = [H_DIM, MLP_DIM, H_DIM - self.noise_first_dim]
 
-        mlp_decoder_context_dims = [self.h_dim + self.bottleneck_dim, self.mlp_dim, output_dim]
+        self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation=ACTIVATION, batch_norm=BATCH_NORM,
+                                            dropout=DROPOUT)
 
-        self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation='leakyrelu', dropout=self.dropout)
+    def add_noise(self, _input, seq_start_end):
+        noise_shape = (seq_start_end.size(0),) + self.noise_dim
+        if USE_GPU:
+            z_decoder = torch.randn(*noise_shape).cuda()
+        else:
+            z_decoder = torch.randn(*noise_shape)
+        _list = []
+        for idx, (start, end) in enumerate(seq_start_end):
+            noise = z_decoder[idx].view(1, -1).repeat(end.item() - start.item(), 1)
+            _list.append(torch.cat([_input[start:end], noise], dim=1))
+        decoder_h = torch.cat(_list, dim=0)
+        return decoder_h
 
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj, train_or_test,
                 speed_to_add, ped_features, user_noise=None):
@@ -238,27 +262,23 @@ class TrajectoryGenerator(nn.Module):
         final_encoder_h = self.encoder(obs_traj_rel, obs_ped_speed)
         if POOLING_TYPE:
             if train_or_test == 1:
-                simulated_ped_speed = speed_control(pred_ped_speed[0], SPEED_TO_ADD, seq_start_end)
+                simulated_ped_speed = speed_control(pred_ped_speed[0, :, :], SPEED_TO_ADD, seq_start_end)
                 next_speed = simulated_ped_speed
             else:
-                next_speed = pred_ped_speed[0]
+                next_speed = pred_ped_speed[0, :, :]
             sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add,
-                                            "encoder", obs_traj[-1], next_speed, ped_features=ped_features)
-            mlp_decoder_context_input = torch.cat([final_encoder_h, sspm], dim=1)
+                                             "encoder", obs_traj[-1, :, :], next_speed, ped_features=ped_features)
+            mlp_decoder_context_input = torch.cat([final_encoder_h.view(-1, self.h_dim), sspm], dim=1)
         else:
-            mlp_decoder_context_input = final_encoder_h
-        mlp_input = self.mlp_decoder_context(mlp_decoder_context_input)
-        batch_noise_dim = (batch, ) + NOISE_DIM
-        if USE_GPU:
-            noise = torch.randn(*batch_noise_dim).cuda()
-        else:
-            noise = torch.randn(*batch_noise_dim)
-        decoder_h = torch.cat([mlp_input, noise], dim=1).unsqueeze(dim=0)
+            mlp_decoder_context_input = final_encoder_h.view(-1, self.h_dim)
 
+        noise_input = self.mlp_decoder_context(mlp_decoder_context_input)
+
+        decoder_h = self.add_noise(noise_input, seq_start_end).unsqueeze(dim=0)
         if USE_GPU:
-            decoder_c = torch.zeros(NUM_LAYERS, batch, self.h_dim).cuda()
+            decoder_c = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
         else:
-            decoder_c = torch.zeros(NUM_LAYERS, batch, self.h_dim)
+            decoder_c = torch.zeros(self.num_layers, batch, self.h_dim)
 
         state_tuple = (decoder_h, decoder_c)
 
@@ -294,16 +314,14 @@ class TrajectoryDiscriminator(nn.Module):
     def __init__(self):
         super(TrajectoryDiscriminator, self).__init__()
 
-        self.encoder = Encoder()
-        self.h_dim = H_DIM
-        self.mlp_dim = MLP_DIM
-        self.dropout = DROPOUT
+        self.encoder = Encoder(h_dim=H_DIM_DIS)
 
-        real_classifier_dims = [self.h_dim, self.mlp_dim, 1]
+        real_classifier_dims = [H_DIM_DIS, MLP_DIM, 1]
         self.real_classifier = make_mlp(
             real_classifier_dims,
-            activation='relu',
-            dropout=self.dropout
+            activation=ACTIVATION,
+            batch_norm=BATCH_NORM,
+            dropout=DROPOUT
         )
 
     def forward(self, traj, traj_rel, ped_speed, seq_start_end=None):

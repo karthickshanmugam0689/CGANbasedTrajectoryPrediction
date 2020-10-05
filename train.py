@@ -6,11 +6,10 @@ import torch.optim as optim
 from constants import *
 
 from trajectories import data_loader
-from losses import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, final_speed_error
-from losses import displacement_error, final_displacement_error
+from losses import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, \
+    final_speed_error, displacement_error, final_displacement_error, relative_to_abs
 
 from models import TrajectoryGenerator, TrajectoryDiscriminator
-from losses import relative_to_abs
 
 torch.backends.cudnn.benchmark = True
 
@@ -134,6 +133,7 @@ def main():
 
 
 def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
+    'This step is similar to Social GAN code'
     if USE_GPU:
         batch = [tensor.cuda() for tensor in batch]
     else:
@@ -171,6 +171,7 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
 
 
 def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
+    'This step is similar to Social GAN Code'
     if USE_GPU:
         batch = [tensor.cuda() for tensor in batch]
     else:

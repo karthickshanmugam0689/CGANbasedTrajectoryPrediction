@@ -1,3 +1,4 @@
+
 #Flag descriptions:
 
 - H_DIM: Hidden dimensions used for both encoder and decoder LSTM
@@ -5,7 +6,7 @@
 - MLP_DIM: MLP dimension
 - NOISE_DIM: Gaussian noise distribution dimension
 - G_LEARNING_RATE, D_LEARNING_RATE: Learning rate of generator and discriminator model
-- NUM_LAYERS = Number of layers we use in LSTM Encoder and DECODER network
+- NUM_LAYERS = Number of layers we use in LSTM Encoder and Decoder network
 - DROPOUT = Dropout to be used in the model
 - NUM_EPOCHS = Number of epochs the model is to be trained. 
 
@@ -28,13 +29,13 @@ Similarly other flags work (ZARA01, ZARA02, HOTEL, UNI)
 
 
 # SPEED CONTROL FLAGS
-- TRAIN_METRIC = We utilize the next speed information from the ground truth to train the model. To differentiate the ground_truth and simulated speeds, we utilize "train_metric" and "test_metric" flags. This value always holds 1. 
+- TRAIN_METRIC = We utilize the next speed information from the ground truth to train the model. To differentiate the ground_truth and simulated speeds, we utilize "train_metric" and "test_metric" flags. This value always holds 0. 
 - TEST_METRIC = To check the model with ground truth speed, use 0. To simulate the model with user-defined speed, use 1.  
 - The following flags are applicable only if the test_metric = 1
 - ADD_SPEED_EVERY_FRAME = This flag adds constant speed to every predicted frame. If this flag is 1, then mention the speed to be added in SPEED_TO_ADD flag.
 SPEED_TO_ADD = Speed to be added at each frame. The value should be between 0 and 1
 - STOP_PED = This flag stops all the pedestrians. This implies that a speed value of 0 is imposed on the pedestrians.
-- CONSTANT_SPEED_FOR_ALL_PED = This flags helps to 
+- CONSTANT_SPEED_FOR_ALL_PED = This flags imposes a constant speed to all pedestrians in the scene. 
 - ADD_SPEED_PARTICULAR_FRAME = False
    FRAMES_TO_ADD_SPEED = []  # Provide a value between 0 to length of (predicted traj-1)
 - MAX_SPEED = Maximum possible speed

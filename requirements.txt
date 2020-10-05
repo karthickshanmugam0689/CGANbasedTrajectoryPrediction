@@ -1,4 +1,4 @@
-attrdict==2.0.0
-numpy==1.14.5
-torch===1.4.0 -f https://download.pytorch.org/whl/torch_stable.html
-torchvision===0.3.0 -f https://download.pytorch.org/whl/torch_stable.html
+attrdict
+numpy
+torch
+torchvision

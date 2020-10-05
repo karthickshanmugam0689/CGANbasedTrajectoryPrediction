@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from constants import *
 import math
-from losses import relative_to_abs
+from utils import relative_to_abs
 
 
 def make_mlp(dim_list, activation='leakyrelu', batch_norm=True, dropout=0):

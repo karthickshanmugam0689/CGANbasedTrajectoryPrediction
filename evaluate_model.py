@@ -4,7 +4,7 @@ import os
 
 from trajectories import data_loader
 from models import TrajectoryGenerator
-from losses import displacement_error, final_displacement_error, relative_to_abs
+from utils import displacement_error, final_displacement_error, relative_to_abs
 from constants import *
 
 

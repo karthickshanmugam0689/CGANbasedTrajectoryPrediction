@@ -1,4 +1,4 @@
-# **CGANbasedTrajectoryPrediction**  (WORK IS STILL IN PROGRESS - BETA VERSION)
+# **CGANbasedTrajectoryPrediction**  (BETA VERSION)
 
 * This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
 * The model proposed in this project can be used to simulate trajectories at different speeds
@@ -22,23 +22,34 @@ python setup.py install
 
 To install all dependencies, run:
 ````
-pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
+pip install -r requirements.txt
 ````
 
-Before training the model, give the absolute path of train, val and test dataset folder in constants.py file. Once changed,
-run the following command:
+Change the necessary fields in Constants.py and Once changed, run the following command:
 ````
 python train.py
 ````
 
-To evaluate the model with actual/real trajectory speed, run:
+To evaluate the model with actual ground_truth trajectory speed, run:
 ````
 python evaluate_model.py
 ````
 
-The control module is coded for
-To evaluate the model with additional speed, run:
+To simulate trajectories at different speed, change the TEST_METRIC to 1 and select one of the following options in CONSTANTS.py file.
+- To maintain constant speeds for all pedestrians: Change the flag CONSTANT_SPEED_FOR_ALL_PED to True and enter a value between 0 and 1 in CONSTANT_SPEED variable
+- To stop all the pedestrians: Change the flag STOP_PED to True
+- To increase speed at every frames: Change the flag ADD_SPEED_EVERY_FRAME TO True and enter a value between 0 and 1 in SPEED_TO_ADD variable.
+- To add speed to a particular frame: Change the flag ADD_SPEED_PARTICULAR_FRAME to True and enter the
+
+After the necessary changes, run:
 ````
-python CGANbasedTrajectoryPrediction/scripts/evaluate_model.py --speed_to_add 0.5
+python evaluate_model.py
 ````
 **Note:** The speed value should be 0 < speed > 1
+
+Visualization is supported only for the simulated trajectories at different speeds:
+
+To visualize the trajectories, run:
+````
+python AnimationPlotForTraj.py
+````

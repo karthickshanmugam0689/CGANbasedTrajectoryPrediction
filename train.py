@@ -6,7 +6,7 @@ import torch.optim as optim
 from constants import *
 
 from trajectories import data_loader
-from losses import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, \
+from utils import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, \
     final_speed_error, displacement_error, final_displacement_error, relative_to_abs
 
 from models import TrajectoryGenerator, TrajectoryDiscriminator

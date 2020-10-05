@@ -133,7 +133,7 @@ def main():
 
 
 def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
-    'This step is similar to Social GAN code'
+    """This step is similar to Social GAN Code"""
     if USE_GPU:
         batch = [tensor.cuda() for tensor in batch]
     else:
@@ -171,7 +171,7 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
 
 
 def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
-    'This step is similar to Social GAN Code'
+    """This step is similar to Social GAN Code"""
     if USE_GPU:
         batch = [tensor.cuda() for tensor in batch]
     else:
@@ -227,7 +227,7 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
     return losses
 
 
-def check_accuracy(loader, generator, discriminator, d_loss_fn, limit=False):
+def check_accuracy(loader, generator, discriminator, d_loss_fn):
     d_losses = []
     metrics = {}
     g_l2_losses_abs, g_l2_losses_rel = ([],) * 2
@@ -285,7 +285,7 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn, limit=False):
 
             loss_mask_sum += torch.numel(loss_mask.data)
             total_traj += pred_traj_gt.size(1)
-            if limit and total_traj >= NUM_SAMPLE_CHECK:
+            if total_traj >= NUM_SAMPLE_CHECK:
                 break
 
     metrics['d_loss'] = sum(d_losses) / len(d_losses)

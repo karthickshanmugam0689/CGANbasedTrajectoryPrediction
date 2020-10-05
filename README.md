@@ -1,6 +1,7 @@
 # **CGANbasedTrajectoryPrediction**  (WORK IS STILL IN PROGRESS - BETA VERSION)
 
 * This project aims to generate realistic trajectories using Conditional GAN architecture with speed as an additional condition.
+* The model proposed in this project can be used to simulate trajectories at different speeds
 
 Pedestrian Simulation with Original Speed:
 ![OriginalSpeedPlot](https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction/blob/master/Plots/Actual%20Speed.gif)

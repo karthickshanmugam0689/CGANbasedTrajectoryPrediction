@@ -77,6 +77,7 @@ class Decoder(nn.Module):
         self.spatial_embedding = nn.Sequential(nn.Linear(3, EMBEDDING_DIM * 2), nn.LeakyReLU(),
                                                nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
         self.hidden2pos = nn.Linear(H_DIM, 2)
+        #self.pool_net = SocialSpeedPoolingModule()
 
     def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, speed_to_add, pred_ped_speed, train_or_test):
         batch = last_pos.size(0)
@@ -102,11 +103,11 @@ class Decoder(nn.Module):
             decoder_input = self.spatial_embedding(decoder_input)
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
-            # EACH TIMESTEP POOLING
-            # pool_h = self.pool_net(state_tuple[0], seq_start_end, train_or_test, speed_to_add, curr_pos, speed)  # B, 32
-            # decoder_h = torch.cat([state_tuple[0].view(-1, self.h_dim), pool_h], dim=1)
-            # decoder_h = self.mlp(decoder_h)
-            # state_tuple = (decoder_h.unsqueeze(dim=0), state_tuple[1])
+            if DECODER_TIMESTEP_POOLING:
+                pool_h = self.pool_net(state_tuple[0], seq_start_end, train_or_test, speed_to_add, curr_pos, speed)  # B, 32
+                decoder_h = torch.cat([state_tuple[0].view(-1, self.h_dim), pool_h], dim=1)
+                decoder_h = self.mlp(decoder_h)
+                state_tuple = (decoder_h.unsqueeze(dim=0), state_tuple[1])
 
             pred_traj_fake_rel.append(rel_pos.view(batch, -1))
             last_pos = curr_pos

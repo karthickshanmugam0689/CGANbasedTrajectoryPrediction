@@ -10,8 +10,6 @@ from constants import *
 
 def evaluate_helper(error, seq_start_end):
     sum_ = []
-    error = torch.stack(error, dim=1)
-
     for (start, end) in seq_start_end:
         _error = sum_.append(torch.min(torch.sum(error[start.item():end.item()], dim=0)))
     return sum(sum_)
@@ -44,11 +42,8 @@ def evaluate(loader, generator, num_samples):
                 if TEST_METRIC:
                     simulated_output.append(logged_output)
 
-            ade_sum = evaluate_helper(ade, seq_start_end)
-            fde_sum = evaluate_helper(fde, seq_start_end)
-
-            ade_outer.append(ade_sum)
-            fde_outer.append(fde_sum)
+            ade_outer.append(evaluate_helper(torch.stack(ade, dim=1), seq_start_end))
+            fde_outer.append(evaluate_helper(torch.stack(fde, dim=1), seq_start_end))
 
         ade = sum(ade_outer) / (sum(total_traj) * PRED_LEN)
         fde = sum(fde_outer) / (sum(total_traj))

@@ -32,25 +32,25 @@ def main():
     if NUM_EPOCHS:
         NUM_ITERATIONS = int(iterations_per_epoch * NUM_EPOCHS)
 
-    generator = TrajectoryGenerator()
+        generator = TrajectoryGenerator()
 
-    generator.apply(init_weights)
-    if USE_GPU == 0:
-        generator.type(torch.FloatTensor).train()
-    else:
-        generator.type(torch.cuda.FloatTensor).train()
-    print('Here is the generator:')
-    print(generator)
+        generator.apply(init_weights)
+        if USE_GPU == 0:
+            generator.type(torch.FloatTensor).train()
+        else:
+            generator.type(torch.cuda.FloatTensor).train()
+        print('Here is the generator:')
+        print(generator)
 
-    discriminator = TrajectoryDiscriminator()
+        discriminator = TrajectoryDiscriminator()
 
-    discriminator.apply(init_weights)
-    if USE_GPU == 0:
-        discriminator.type(torch.FloatTensor).train()
-    else:
-        discriminator.type(torch.cuda.FloatTensor).train()
-    print('Here is the discriminator:')
-    print(discriminator)
+        discriminator.apply(init_weights)
+        if USE_GPU == 0:
+            discriminator.type(torch.FloatTensor).train()
+        else:
+            discriminator.type(torch.cuda.FloatTensor).train()
+        print('Here is the discriminator:')
+        print(discriminator)
 
     g_loss_fn = gan_g_loss
     d_loss_fn = gan_d_loss

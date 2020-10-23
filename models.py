@@ -77,7 +77,7 @@ class Decoder(nn.Module):
         self.spatial_embedding = nn.Sequential(nn.Linear(3, EMBEDDING_DIM * 2), nn.LeakyReLU(),
                                                nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
         self.hidden2pos = nn.Linear(H_DIM, 2)
-        #self.pool_net = SocialSpeedPoolingModule()
+        self.pool_net = SocialSpeedPoolingModule()
 
     def forward(self, last_pos, last_pos_rel, state_tuple, seq_start_end, speed_to_add, pred_ped_speed, train_or_test):
         batch = last_pos.size(0)

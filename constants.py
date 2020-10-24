@@ -1,7 +1,7 @@
 # DATASET OPTIONS
 OBS_LEN = 8
 PRED_LEN = 12
-TRAIN_DATASET_PATH = 'datasets/eth/train'
+TRAIN_DATASET_PATH = 'Cross_Domain_Dataset/train'
 VAL_DATASET_PATH = 'datasets/eth/val'
 TEST_DATASET_PATH = 'datasets/eth/test'
 CHECKPOINT_NAME = 'Checkpoints/ETH/model_checkpoint.pt'

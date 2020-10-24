@@ -1,6 +1,6 @@
 # DATASET OPTIONS
-OBS_LEN = 8
-PRED_LEN = 12
+OBS_LEN = 6
+PRED_LEN = 6
 TRAIN_DATASET_PATH = 'Cross_Domain_Dataset/train'
 VAL_DATASET_PATH = 'datasets/eth/val'
 TEST_DATASET_PATH = 'datasets/eth/test'

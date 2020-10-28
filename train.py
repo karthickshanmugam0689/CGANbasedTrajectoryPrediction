@@ -97,7 +97,7 @@ def main():
                 print('Checking stats on val ...')
                 metrics_val = check_accuracy(val_loader, generator, discriminator, d_loss_fn)
                 print('Checking stats on train ...')
-                metrics_train = check_accuracy(train_loader, generator, discriminator, d_loss_fn, limit=True)
+                metrics_train = check_accuracy(train_loader, generator, discriminator, d_loss_fn)
 
                 for k, v in sorted(metrics_val.items()):
                     print('  [val] {}: {:.3f}'.format(k, v))

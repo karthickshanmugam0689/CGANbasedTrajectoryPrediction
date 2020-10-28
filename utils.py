@@ -34,7 +34,7 @@ def l2_loss(pred_traj, pred_traj_gt, loss_mask, random=0, mode='average'):
 
 
 def displacement_error(pred_traj, pred_traj_gt, consider_ped=None, mode='sum'):
-    seq_len, _, _ = pred_traj.size()
+    seq_len, count, _ = pred_traj.size()
     loss = pred_traj_gt.permute(1, 0, 2) - pred_traj.permute(1, 0, 2)
     loss = loss ** 2
     if consider_ped is not None:
@@ -44,12 +44,10 @@ def displacement_error(pred_traj, pred_traj_gt, consider_ped=None, mode='sum'):
     if mode == 'sum':
         return torch.sum(loss)
     elif mode == 'raw':
-        return loss
+        return loss, count
 
 
-def final_displacement_error(
-        pred_pos, pred_pos_gt, consider_ped=None, mode='sum'
-):
+def final_displacement_error(pred_pos, pred_pos_gt, label, consider_ped=None, mode='sum'):
     loss = pred_pos_gt - pred_pos
     loss = loss ** 2
     if consider_ped is not None:

@@ -97,7 +97,7 @@ def main():
                 print('Checking stats on val ...')
                 metrics_val = check_accuracy(val_loader, generator, discriminator, d_loss_fn)
                 print('Checking stats on train ...')
-                metrics_train = check_accuracy(train_loader, generator, discriminator, d_loss_fn, limit=True)
+                metrics_train = check_accuracy(train_loader, generator, discriminator, d_loss_fn)
 
                 for k, v in sorted(metrics_val.items()):
                     print('  [val] {}: {:.3f}'.format(k, v))
@@ -139,12 +139,12 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
     else:
         batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed,
-     ped_features) = batch
+     obs_label, pred_label) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
 
     generator_out, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
-                                 pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+                                 pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, obs_label, pred_label)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -154,9 +154,10 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
     traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
     traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
     ped_speed = torch.cat([obs_ped_speed, pred_ped_speed], dim=0)
+    label_info = torch.cat([obs_label, pred_label], dim=0)
 
-    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
-    scores_real = discriminator(traj_real, traj_real_rel, ped_speed, seq_start_end)
+    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, label_info, seq_start_end)
+    scores_real = discriminator(traj_real, traj_real_rel, ped_speed, label_info, seq_start_end)
 
     data_loss = d_loss_fn(scores_real, scores_fake)
     losses['D_data_loss'] = data_loss.item()
@@ -177,7 +178,7 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
     else:
         batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed,
-     ped_features) = batch
+     obs_label, pred_label) = batch
 
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
@@ -187,7 +188,7 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
 
     for _ in range(BEST_K):
         generator_out, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
-                                     TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+                                     TRAIN_METRIC, SPEED_TO_ADD, obs_label, pred_label)
 
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -212,8 +213,9 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
     traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
     traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
     ped_speed = torch.cat([obs_ped_speed, pred_ped_speed], dim=0)
+    label_info = torch.cat([obs_label, pred_label], dim=0)
 
-    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
+    scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, label_info, seq_start_end)
     discriminator_loss = g_loss_fn(scores_fake)
 
     loss += discriminator_loss
@@ -231,11 +233,11 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
     d_losses = []
     metrics = {}
     g_l2_losses_abs, g_l2_losses_rel = ([],) * 2
-    disp_error = []
-    f_disp_error = []
+    veh_disp_error, ped_disp_error, cyc_disp_error = [], [], []
+    veh_f_disp_error, ped_f_disp_error, cyc_f_disp_error = [], [], []
     mean_speed_disp_error = []
     final_speed_disp_error = []
-    total_traj = 0
+    total_traj, veh_total_traj, ped_total_traj, cyc_total_traj  = 0, 0, 0, 0
     loss_mask_sum = 0
     generator.eval()
     with torch.no_grad():
@@ -245,10 +247,10 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
             else:
                 batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed,
-             pred_ped_speed, ped_features) = batch
+             pred_ped_speed, obs_label, pred_label) = batch
 
             pred_traj_fake_rel, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
-                                              pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+                                              pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, obs_label, pred_label)
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
             loss_mask = loss_mask[:, OBS_LEN:]
 
@@ -256,8 +258,8 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
                 pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
                 pred_traj_fake_rel, loss_mask
             )
-            ade = cal_ade(pred_traj_gt, pred_traj_fake)
-            fde = cal_fde(pred_traj_gt, pred_traj_fake)
+            veh_ade, ped_ade, cyc_ade, veh_count, ped_count, cyc_count = cal_ade(pred_traj_fake, pred_traj_gt, pred_label)
+            veh_fde, ped_fde, cyc_fde = cal_fde(pred_traj_fake, pred_traj_gt, pred_label)
 
             last_pos = obs_traj[-1]
             traj_for_speed_cal = torch.cat([last_pos.unsqueeze(dim=0), pred_traj_fake], dim=0)
@@ -269,30 +271,43 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
             traj_fake = torch.cat([obs_traj, pred_traj_fake], dim=0)
             traj_fake_rel = torch.cat([obs_traj_rel, pred_traj_fake_rel], dim=0)
             ped_speed = torch.cat([obs_ped_speed, pred_ped_speed], dim=0)
+            label_info = torch.cat([obs_label, pred_label], dim=0)
 
-            scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, seq_start_end)
-            scores_real = discriminator(traj_real, traj_real_rel, ped_speed, seq_start_end)
+            scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, label_info, seq_start_end)
+            scores_real = discriminator(traj_real, traj_real_rel, ped_speed, label_info, seq_start_end)
 
             d_loss = d_loss_fn(scores_real, scores_fake)
             d_losses.append(d_loss.item())
 
             g_l2_losses_abs.append(g_l2_loss_abs.item())
             g_l2_losses_rel.append(g_l2_loss_rel.item())
-            disp_error.append(ade.item())
-            f_disp_error.append(fde.item())
+            veh_disp_error.append(veh_ade.item())
+            ped_disp_error.append(ped_ade.item())
+            cyc_disp_error.append(cyc_ade.item())
+            veh_f_disp_error.append(veh_fde.item())
+            ped_f_disp_error.append(ped_fde.item())
+            cyc_f_disp_error.append(cyc_fde.item())
+
             mean_speed_disp_error.append(msae.item())
             final_speed_disp_error.append(fse.item())
 
             loss_mask_sum += torch.numel(loss_mask.data)
             total_traj += pred_traj_gt.size(1)
+            veh_total_traj += veh_count
+            ped_total_traj += ped_count
+            cyc_total_traj += cyc_count
             if total_traj >= NUM_SAMPLE_CHECK:
                 break
 
     metrics['d_loss'] = sum(d_losses) / len(d_losses)
     metrics['g_l2_loss_abs'] = sum(g_l2_losses_abs) / loss_mask_sum
     metrics['g_l2_loss_rel'] = sum(g_l2_losses_rel) / loss_mask_sum
-    metrics['ade'] = sum(disp_error) / (total_traj * PRED_LEN)
-    metrics['fde'] = sum(f_disp_error) / total_traj
+    metrics['veh_ade'] = VEHICLE_COE * (sum(veh_disp_error) / (veh_total_traj * PRED_LEN))
+    metrics['ped_ade'] = PEDESTRIAN_COE * (sum(ped_disp_error) / (ped_total_traj * PRED_LEN))
+    metrics['cyc_ade'] = BICYCLE_COE * (sum(cyc_disp_error) / (cyc_total_traj * PRED_LEN))
+    metrics['veh_fde'] = VEHICLE_COE * (sum(veh_f_disp_error) / veh_total_traj)
+    metrics['ped_fde'] = PEDESTRIAN_COE * (sum(ped_f_disp_error) / ped_total_traj)
+    metrics['cyc_fde'] = BICYCLE_COE * (sum(cyc_f_disp_error) / cyc_total_traj)
     metrics['msae'] = sum(mean_speed_disp_error) / (total_traj * PRED_LEN)
     metrics['fse'] = sum(final_speed_disp_error) / total_traj
 
@@ -306,12 +321,27 @@ def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake
     return g_l2_loss_abs, g_l2_loss_rel
 
 
-def cal_ade(pred_traj_gt, pred_traj_fake):
-    ade = displacement_error(pred_traj_fake, pred_traj_gt)
-    return ade
+def cal_ade(pred_traj_gt, pred_traj_fake, label):
+    vehicle_gt_list, vehicle_pred_list, ped_gt_list, \
+    ped_pred_list, cycle_gt_list, cycle_pred_list = [], [], [], [], [], []
+    for a,b,c in zip(pred_traj_gt, pred_traj_fake, label):
+        for a, b, c in zip(a, b, c):
+            if torch.eq(c, 0.1) or torch.eq(c, 0.2):
+                vehicle_gt_list.append(a)
+                vehicle_pred_list.append(b)
+            elif torch.eq(c, 0.3):
+                ped_gt_list.append(a)
+                ped_pred_list.append(b)
+            elif torch.eq(c, 0.4):
+                cycle_gt_list.append(a)
+                cycle_pred_list.append(b)
+    veh_ade, veh_count = displacement_error(torch.cat(vehicle_pred_list, dim=0).view(PRED_LEN, -1, 2), torch.cat(vehicle_gt_list, dim=0).view(PRED_LEN, -1, 2))
+    ped_ade, ped_count = displacement_error(torch.cat(ped_pred_list, dim=0).view(PRED_LEN, -1, 2), torch.cat(ped_gt_list, dim=0).view(PRED_LEN, -1, 2))
+    cyc_ade, cyc_count = displacement_error(torch.cat(cycle_pred_list).view(PRED_LEN, -1, 2), torch.cat(cycle_gt_list).view(PRED_LEN, -1, 2))
+    return veh_ade, ped_ade, cyc_ade, veh_count, ped_count, cyc_count
 
 
-def cal_fde(pred_traj_gt, pred_traj_fake):
+def cal_fde(pred_traj_gt, pred_traj_fake, label):
     fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])
     return fde
 

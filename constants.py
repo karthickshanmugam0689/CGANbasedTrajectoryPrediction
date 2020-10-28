@@ -2,9 +2,9 @@
 OBS_LEN = 6
 PRED_LEN = 6
 TRAIN_DATASET_PATH = 'Cross_Domain_Dataset/train'
-VAL_DATASET_PATH = 'datasets/eth/val'
-TEST_DATASET_PATH = 'datasets/eth/test'
-CHECKPOINT_NAME = 'Checkpoints/ETH/model_checkpoint.pt'
+VAL_DATASET_PATH = 'Cross_Domain_Dataset/val'
+TEST_DATASET_PATH = 'Cross_Domain_Dataset/test'
+CHECKPOINT_NAME = 'Checkpoints/ApolloScape_Dataset/model_checkpoint.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
 ETH = 1
@@ -65,8 +65,13 @@ MAX_SPEED = 0.9999
 G_STEPS = 1
 D_STEPS = 2
 BEST_K = 10
-PRINT_EVERY = 100
+PRINT_EVERY = 10
 NUM_SAMPLES = 20
 NUM_SAMPLES_CHECK = 5000
 NOISE = True
 NUM_SAMPLE_CHECK = 5000
+
+# CROSS DOMAIN LOSS FUNCTION WEIGHTED AVERAGES
+VEHICLE_COE = 0.2
+PEDESTRIAN_COE = 0.58
+BICYCLE_COE = 0.22

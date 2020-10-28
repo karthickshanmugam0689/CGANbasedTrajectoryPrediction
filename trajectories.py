@@ -28,7 +28,7 @@ def data_loader(path, metric):
 
 def seq_collate(data):
     (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed,
-     pred_ped_abs_speed, ped_features) = zip(*data)
+     pred_ped_abs_speed, obs_label, pred_label) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -42,10 +42,12 @@ def seq_collate(data):
     pred_ped_abs_speed = torch.cat(pred_ped_abs_speed, dim=0).permute(2, 0, 1)
     seq_start_end = torch.LongTensor(seq_start_end)
     loss_mask = torch.cat(loss_mask_list, dim=0)
-    ped_features = torch.cat(ped_features, dim=0)
+    #ped_features = torch.cat(ped_features, dim=0)
+    obs_label = torch.cat(obs_label, dim=0).permute(2, 0, 1)
+    pred_label = torch.cat(pred_label, dim=0).permute(2, 0, 1)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, loss_mask, seq_start_end, obs_ped_abs_speed,
-        pred_ped_abs_speed, ped_features
+        pred_ped_abs_speed, obs_label, pred_label
     ]
 
     return tuple(out)
@@ -85,9 +87,10 @@ def get_min_max_distance(seq_len, all_files):
             obj_in_curr_seq = np.unique(curr_seq_data[:, 1])
             for _, obj_id in enumerate(obj_in_curr_seq):
                 curr_obj_seq = curr_seq_data[curr_seq_data[:, 1] == obj_id, :]
+                label = curr_obj_seq[0, 2]
                 pad_front = frames.index(curr_obj_seq[0, 0]) - idx
                 pad_end = frames.index(curr_obj_seq[-1, 0]) - idx + 1
-                if pad_end - pad_front != seq_len:
+                if pad_end - pad_front != seq_len and label != 5:
                     continue
                 curr_obj_x_axis = [np.square(t - s) for s, t in
                                            zip(curr_obj_seq[:, 3], curr_obj_seq[1:, 3])]
@@ -203,7 +206,7 @@ class TrajectoryDataset(Dataset):
                     pad_end = frames.index(curr_obj_seq[-1, 0]) - idx + 1
                     label = curr_obj_seq[0, 2]
                     curr_seq_transpose = np.transpose(curr_obj_seq[:, 3:5])
-                    if pad_end - pad_front == SEQ_LEN and curr_seq_transpose.shape[1] == SEQ_LEN:
+                    if pad_end - pad_front == SEQ_LEN and curr_seq_transpose.shape[1] == SEQ_LEN and label != 5:
                         curr_ped_x_axis_new = [0.0] + [np.square(t - s) for s, t in
                                                        zip(curr_obj_seq[:, 3], curr_obj_seq[1:, 3])]
                         curr_ped_y_axis_new = [0.0] + [np.square(t - s) for s, t in
@@ -213,16 +216,12 @@ class TrajectoryDataset(Dataset):
                         # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                         curr_abs_speed = curr_dist / 0.5
                         curr_abs_speed = [(x - min_speed) / (max_speed - min_speed) if x > 0 else 0 for x in curr_abs_speed]
-                        if label == 1:  # Small Vehicles
+                        if label == 1 or label == 2:  # Small Vehicles and Big Vehicles considered as Vehcile
                             embedding_label = 0.1
-                        elif label == 2:  # Big Vehicles
-                            embedding_label = 0.2
                         elif label == 3:  # Pedestrians
                             embedding_label = 0.3
                         elif label == 4:  # Cyclist
                             embedding_label = 0.4
-                        else:  # Others
-                            embedding_label = 0.5
                         curr_abs_speed = np.around(curr_abs_speed, decimals=4)
                         #curr_abs_speed = [sigmoid(x) for x in curr_abs_speed]
                         #curr_abs_speed = np.around(curr_abs_speed, decimals=4)
@@ -290,21 +289,20 @@ class TrajectoryDataset(Dataset):
         #self.ped_features = torch.from_numpy(features).type(torch.float)
 
         # Convert numpy -> Torch Tensor
-        self.obs_traj = torch.from_numpy(
-            seq_list[:, :, :OBS_LEN]).type(torch.float)
-        self.pred_traj = torch.from_numpy(
-            seq_list[:, :, OBS_LEN:]).type(torch.float)
-        self.obs_traj_rel = torch.from_numpy(
-            seq_list_rel[:, :, :OBS_LEN]).type(torch.float)
-        self.pred_traj_rel = torch.from_numpy(
-            seq_list_rel[:, :, OBS_LEN:]).type(torch.float)
-        self.obs_obj_abs_speed = obj_abs_speed[:, :OBS_LEN]
-        self.obs_obj_abs_speed = self.obs_obj_abs_speed.unsqueeze(dim=1)
-        self.pred_obj_abs_speed = obj_abs_speed[:, OBS_LEN:]
-        self.pred_obj_abs_speed = self.pred_obj_abs_speed.unsqueeze(dim=1)
+        self.obs_traj = torch.from_numpy(seq_list[:, :, :OBS_LEN]).type(torch.float)
+        self.pred_traj = torch.from_numpy(seq_list[:, :, OBS_LEN:]).type(torch.float)
+
+        self.obs_traj_rel = torch.from_numpy(seq_list_rel[:, :, :OBS_LEN]).type(torch.float)
+        self.pred_traj_rel = torch.from_numpy(seq_list_rel[:, :, OBS_LEN:]).type(torch.float)
+
+        self.obs_obj_abs_speed = obj_abs_speed[:, :OBS_LEN].unsqueeze(dim=1).type(torch.float)
+        self.pred_obj_abs_speed = obj_abs_speed[:, OBS_LEN:].unsqueeze(dim=1).type(torch.float)
+
         self.loss_mask = torch.from_numpy(loss_mask_list).type(torch.float)
-        self.obs_obj_label = torch.from_numpy(obj_label[:, :OBS_LEN]).type(torch.float)
-        self.pred_obj_label = torch.from_numpy(obj_label[:, OBS_LEN:]).type(torch.float)
+
+        self.obs_obj_label = torch.from_numpy(obj_label[:, :OBS_LEN]).unsqueeze(dim=1).type(torch.float)
+        self.pred_obj_label = torch.from_numpy(obj_label[:, OBS_LEN:]).unsqueeze(dim=1).type(torch.float)
+
         cum_start_idx = [0] + np.cumsum(num_peds_in_seq).tolist()
         self.seq_start_end = [
             (start, end)
@@ -319,7 +317,8 @@ class TrajectoryDataset(Dataset):
         out = [
             self.obs_traj[start:end, :], self.pred_traj[start:end, :],
             self.obs_traj_rel[start:end, :], self.pred_traj_rel[start:end, :],
-            self.loss_mask[start:end, :], self.obs_ped_abs_speed[start:end, :],
-            self.pred_ped_abs_speed[start:end, :], self.ped_features[start:end, :]
+            self.loss_mask[start:end, :], self.obs_obj_abs_speed[start:end, :],
+            self.pred_obj_abs_speed[start:end, :], self.obs_obj_label[start:end, :],
+            self.pred_obj_label[start:end, :]
         ]
         return out

@@ -50,7 +50,7 @@ class Encoder(nn.Module):
         state_tuple = self.init_hidden(batch)
         output, state = self.encoder(obs_traj_embedding, state_tuple)
         final_h = state[0]
-        return final_h
+        return final_h.view(batch, -1)
 
 
 def sigmoid(x):
@@ -69,7 +69,7 @@ class Decoder(nn.Module):
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
 
-        self.decoder = nn.LSTM(EMBEDDING_DIM, H_DIM, NUM_LAYERS, dropout=DROPOUT)
+        self.decoder = nn.LSTM(EMBEDDING_DIM, H_DIM, NUM_LAYERS_DECODER, dropout=DROPOUT)
 
         mlp_dims = [H_DIM + BOTTLENECK_DIM, MLP_DIM, H_DIM]
         self.mlp = make_mlp(mlp_dims, activation=ACTIVATION, batch_norm=BATCH_NORM, dropout=DROPOUT)
@@ -126,7 +126,7 @@ class SocialSpeedPoolingModule(nn.Module):
         self.bottleneck_dim = BOTTLENECK_DIM
         self.embedding_dim = EMBEDDING_DIM
 
-        mlp_pre_dim = self.embedding_dim + self.h_dim
+        mlp_pre_dim = self.embedding_dim + self.h_dim*2
         mlp_pre_pool_dims = [mlp_pre_dim, 512, BOTTLENECK_DIM]
 
         self.pos_embedding = nn.Sequential(nn.Linear(4, EMBEDDING_DIM * 2), nn.LeakyReLU(),
@@ -140,7 +140,7 @@ class SocialSpeedPoolingModule(nn.Module):
             start = start.item()
             end = end.item()
             num_ped = end - start
-            curr_hidden_ped = h_states.view(-1, self.h_dim)[start:end]
+            curr_hidden_ped = h_states[start:end]
             repeat_hstate = curr_hidden_ped.repeat(num_ped, 1).view(num_ped, num_ped, -1)
 
             feature = torch.cat([last_pos[start:end], speed[start:end], label[start:end]], dim=1)
@@ -155,7 +155,7 @@ class SocialSpeedPoolingModule(nn.Module):
             # POSITION SPEED Pooling
             position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 4))
             pos_mlp_input = torch.cat(
-                [repeat_hstate.view(-1, self.h_dim), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
+                [repeat_hstate.view(-1, self.h_dim*2), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
             pos_attn_h = self.mlp_pre_pool(pos_mlp_input)
             curr_pool_h = pos_attn_h.view(num_ped, num_ped, -1).max(1)[0]
             pool_h.append(curr_pool_h)
@@ -220,7 +220,7 @@ class TrajectoryGenerator(nn.Module):
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
         self.noise_dim = NOISE_DIM
-        self.num_layers = NUM_LAYERS
+        self.num_layers = NUM_LAYERS_DECODER
         self.bottleneck_dim = BOTTLENECK_DIM
 
         self.encoder = Encoder(h_dim=H_DIM)
@@ -230,9 +230,9 @@ class TrajectoryGenerator(nn.Module):
         self.noise_first_dim = NOISE_DIM[0]
 
         if POOLING_TYPE:
-            mlp_decoder_context_dims = [H_DIM + BOTTLENECK_DIM, MLP_DIM, H_DIM - self.noise_first_dim]
+            mlp_decoder_context_dims = [H_DIM*2 + BOTTLENECK_DIM, MLP_DIM, H_DIM - self.noise_first_dim]
         else:
-            mlp_decoder_context_dims = [H_DIM, MLP_DIM, H_DIM - self.noise_first_dim]
+            mlp_decoder_context_dims = [H_DIM*2, MLP_DIM, H_DIM - self.noise_first_dim]
 
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation=ACTIVATION, batch_norm=BATCH_NORM,
                                             dropout=DROPOUT)
@@ -262,7 +262,7 @@ class TrajectoryGenerator(nn.Module):
                 next_speed = pred_ped_speed[0, :, :]
             sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add,
                                              "encoder", obs_traj[-1, :, :], next_speed, obs_label[-1, :, :], ped_features=pred_label)
-            mlp_decoder_context_input = torch.cat([final_encoder_h.view(-1, self.h_dim), sspm], dim=1)
+            mlp_decoder_context_input = torch.cat([final_encoder_h.view(-1, self.h_dim*2), sspm], dim=1)
         else:
             mlp_decoder_context_input = final_encoder_h.view(-1, self.h_dim)
 
@@ -311,7 +311,7 @@ class TrajectoryDiscriminator(nn.Module):
 
         self.encoder = Encoder(h_dim=H_DIM_DIS)
 
-        real_classifier_dims = [H_DIM_DIS, MLP_DIM, 1]
+        real_classifier_dims = [H_DIM_DIS*2, MLP_DIM, 1]
         self.real_classifier = make_mlp(
             real_classifier_dims,
             activation=ACTIVATION,

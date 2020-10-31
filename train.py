@@ -25,8 +25,8 @@ def main():
     print("Process Started")
     print("Initializing train dataset")
     train_dset, train_loader = data_loader(TRAIN_DATASET_PATH, train_metric)
-    print("Initializing val dataset")
-    _, val_loader = data_loader(VAL_DATASET_PATH, train_metric)
+    #print("Initializing val dataset")
+    #_, val_loader = data_loader(VAL_DATASET_PATH, train_metric)
 
     iterations_per_epoch = len(train_dset) / BATCH / D_STEPS
     if NUM_EPOCHS:
@@ -69,7 +69,8 @@ def main():
         'g_best_state': None,
         'd_best_state': None
     }
-    ade_list, fde_list, avg_speed_error, f_speed_error = [], [], [], []
+    ade_list, fde_list, wa_ade_list, wa_fde_list, veh_ade_list, veh_fde_list, ped_ade_list, ped_fde_list, \
+    cyc_ade_list, cyc_fde_list, avg_speed_error, f_speed_error = [], [], [], [], [], [], [], [], [], [], [], []
     while epoch < NUM_EPOCHS:
         gc.collect()
         d_steps_left, g_steps_left = D_STEPS, G_STEPS
@@ -94,29 +95,66 @@ def main():
                 for k, v in sorted(losses_g.items()):
                     print('  [G] {}: {:.3f}'.format(k, v))
 
-                print('Checking stats on val ...')
-                metrics_val = check_accuracy(val_loader, generator, discriminator, d_loss_fn)
+                #print('Checking stats on val ...')
+                #metrics_val = check_accuracy(val_loader, generator, discriminator, d_loss_fn)
                 print('Checking stats on train ...')
                 metrics_train = check_accuracy(train_loader, generator, discriminator, d_loss_fn)
 
-                for k, v in sorted(metrics_val.items()):
-                    print('  [val] {}: {:.3f}'.format(k, v))
+                #for k, v in sorted(metrics_val.items()):
+                #    print('  [val] {}: {:.3f}'.format(k, v))
                 for k, v in sorted(metrics_train.items()):
                     print('  [train] {}: {:.3f}'.format(k, v))
 
-                ade_list.append(metrics_val['ade'])
-                fde_list.append(metrics_val['fde'])
-                avg_speed_error.append(metrics_val['msae'])
-                f_speed_error.append(metrics_val['fse'])
+                wa_ade_list.append(metrics_train['WSADE'])
+                wa_fde_list.append(metrics_train['WSFDE'])
 
-                if metrics_val.get('ade') == min(ade_list) or metrics_val['ade'] < min(ade_list):
+                ade_list.append(metrics_train['ade'])
+                fde_list.append(metrics_train['fde'])
+
+                # VEHICLE PARAMS
+                veh_ade_list.append(metrics_train['veh_ade'])
+                veh_fde_list.append(metrics_train['veh_fde'])
+
+                # PEDESTRIAN PARAMS
+                ped_ade_list.append(metrics_train['ped_ade'])
+                ped_fde_list.append(metrics_train['ped_fde'])
+
+                # BICYCLIST PARAMS
+                cyc_ade_list.append(metrics_train['cyc_ade'])
+                cyc_fde_list.append(metrics_train['cyc_fde'])
+
+                avg_speed_error.append(metrics_train['msae'])
+                f_speed_error.append(metrics_train['fse'])
+
+                if metrics_train.get('WSADE') == min(wa_ade_list) or metrics_train['WSADE'] < min(wa_ade_list):
+                    print('New low for wa_avg_disp_error')
+                if metrics_train.get('WSFDE') == min(wa_fde_list) or metrics_train['WSFDE'] < min(wa_fde_list):
+                    print('New low for wa_final_disp_error')
+
+                if metrics_train.get('ade') == min(ade_list) or metrics_train['ade'] < min(ade_list):
                     print('New low for avg_disp_error')
-                if metrics_val.get('fde') == min(fde_list) or metrics_val['fde'] < min(fde_list):
+                if metrics_train.get('fde') == min(fde_list) or metrics_train['fde'] < min(fde_list):
                     print('New low for final_disp_error')
-                if metrics_val.get('msae') == min(avg_speed_error) or metrics_val['msae'] < min(avg_speed_error):
-                    print('New low for avg_speed_error')
-                if metrics_val.get('fse') == min(f_speed_error) or metrics_val['fse'] < min(f_speed_error):
-                    print('New low for final_speed_error')
+
+                #if metrics_val.get('veh_ade') == min(veh_ade_list) or metrics_val['veh_ade'] < min(veh_ade_list):
+                #    print('New low for veh avg_disp_error')
+                #if metrics_val.get('veh_fde') == min(veh_fde_list) or metrics_val['veh_fde'] < min(veh_fde_list):
+                #    print('New low for veh f_disp_error')
+
+                #if metrics_val.get('ped_ade') == min(ped_ade_list) or metrics_val['ped_ade'] < min(ped_ade_list):
+                #    print('New low for ped avg_disp_error')
+                #if metrics_val.get('ped_fde') == min(ped_fde_list) or metrics_val['ped_fde'] < min(ped_fde_list):
+                #    print('New low for ped f_disp_error')
+
+                #if metrics_val.get('cyc_ade') == min(cyc_ade_list) or metrics_val['cyc_ade'] < min(cyc_ade_list):
+                #    print('New low for cyc avg_disp_error')
+                #if metrics_val.get('cyc_fde') == min(cyc_fde_list) or metrics_val['cyc_fde'] < min(cyc_fde_list):
+                #    print('New low for cyc f_disp_error')
+
+                #if metrics_val.get('msae') == min(avg_speed_error) or metrics_val['msae'] < min(avg_speed_error):
+                #    print('New low for avg_speed_error')
+                #if metrics_val.get('fse') == min(f_speed_error) or metrics_val['fse'] < min(f_speed_error):
+                #    print('New low for final_speed_error')
 
                 checkpoint['g_state'] = generator.state_dict()
                 checkpoint['g_optim_state'] = optimizer_g.state_dict()
@@ -233,8 +271,8 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
     d_losses = []
     metrics = {}
     g_l2_losses_abs, g_l2_losses_rel = ([],) * 2
-    veh_disp_error, ped_disp_error, cyc_disp_error = [], [], []
-    veh_f_disp_error, ped_f_disp_error, cyc_f_disp_error = [], [], []
+    ade_error, veh_disp_error, ped_disp_error, cyc_disp_error = [], [], [], []
+    fde_error, veh_f_disp_error, ped_f_disp_error, cyc_f_disp_error = [], [], [], []
     mean_speed_disp_error = []
     final_speed_disp_error = []
     total_traj, veh_total_traj, ped_total_traj, cyc_total_traj  = 0, 0, 0, 0
@@ -258,8 +296,21 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
                 pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
                 pred_traj_fake_rel, loss_mask
             )
-            veh_ade, ped_ade, cyc_ade, veh_count, ped_count, cyc_count = cal_ade(pred_traj_fake, pred_traj_gt, pred_label)
-            veh_fde, ped_fde, cyc_fde = cal_fde(pred_traj_fake, pred_traj_gt, pred_label)
+
+            general_ade, _ = displacement_error(pred_traj_fake, pred_traj_gt)  # ADE for All
+            general_fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])  # FDE for All
+            # Get Label-wise Trajectories
+            veh_fake, veh_gt, ped_fake, ped_gt, cyc_fake, cyc_gt = get_diff_traj(pred_traj_fake, pred_traj_gt, pred_label)
+
+            # Average Displacement Error
+            veh_ade, veh_count = displacement_error(veh_fake, veh_gt)  # ADE for Vehicles
+            ped_ade, ped_count = displacement_error(ped_fake, ped_gt)  # ADE for Pedestrians
+            cyc_ade, cyc_count = displacement_error(cyc_fake, cyc_gt)  # ADE for Bicycle
+
+            # Final Displacement Error
+            veh_fde = final_displacement_error(veh_fake, veh_gt)  # FDE for Vehicles
+            ped_fde = final_displacement_error(ped_fake, ped_gt)  # FDE for Pedestrians
+            cyc_fde = final_displacement_error(cyc_fake, cyc_gt)  # FDE for Bicycle
 
             last_pos = obs_traj[-1]
             traj_for_speed_cal = torch.cat([last_pos.unsqueeze(dim=0), pred_traj_fake], dim=0)
@@ -281,6 +332,9 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
 
             g_l2_losses_abs.append(g_l2_loss_abs.item())
             g_l2_losses_rel.append(g_l2_loss_rel.item())
+
+            ade_error.append(general_ade.item())
+            fde_error.append(general_fde.item())
             veh_disp_error.append(veh_ade.item())
             ped_disp_error.append(ped_ade.item())
             cyc_disp_error.append(cyc_ade.item())
@@ -299,15 +353,25 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
             if total_traj >= NUM_SAMPLE_CHECK:
                 break
 
+    veh_wa_ade = VEHICLE_COE * (sum(veh_disp_error) / (veh_total_traj * PRED_LEN))
+    ped_wa_ade = PEDESTRIAN_COE * (sum(ped_disp_error) / (ped_total_traj * PRED_LEN))
+    cyc_wa_ade = BICYCLE_COE * (sum(cyc_disp_error) / (cyc_total_traj * PRED_LEN))
+    veh_wa_fde = VEHICLE_COE * (sum(veh_f_disp_error) / veh_total_traj)
+    ped_wa_fde = PEDESTRIAN_COE * (sum(ped_f_disp_error) / ped_total_traj)
+    cyc_wa_fde = BICYCLE_COE * (sum(cyc_f_disp_error) / cyc_total_traj)
     metrics['d_loss'] = sum(d_losses) / len(d_losses)
     metrics['g_l2_loss_abs'] = sum(g_l2_losses_abs) / loss_mask_sum
     metrics['g_l2_loss_rel'] = sum(g_l2_losses_rel) / loss_mask_sum
-    metrics['veh_ade'] = VEHICLE_COE * (sum(veh_disp_error) / (veh_total_traj * PRED_LEN))
-    metrics['ped_ade'] = PEDESTRIAN_COE * (sum(ped_disp_error) / (ped_total_traj * PRED_LEN))
-    metrics['cyc_ade'] = BICYCLE_COE * (sum(cyc_disp_error) / (cyc_total_traj * PRED_LEN))
-    metrics['veh_fde'] = VEHICLE_COE * (sum(veh_f_disp_error) / veh_total_traj)
-    metrics['ped_fde'] = PEDESTRIAN_COE * (sum(ped_f_disp_error) / ped_total_traj)
-    metrics['cyc_fde'] = BICYCLE_COE * (sum(cyc_f_disp_error) / cyc_total_traj)
+    metrics['veh_ade'] = veh_wa_ade
+    metrics['ped_ade'] = ped_wa_ade
+    metrics['cyc_ade'] = cyc_wa_ade
+    metrics['veh_fde'] = veh_wa_fde
+    metrics['ped_fde'] = ped_wa_fde
+    metrics['cyc_fde'] = cyc_wa_fde
+    metrics['WSADE'] = veh_wa_ade + ped_wa_ade + cyc_wa_ade
+    metrics['WSFDE'] = veh_wa_fde + ped_wa_fde + cyc_wa_fde
+    metrics['ade'] = sum(ade_error) / (total_traj * PRED_LEN)
+    metrics['fde'] = sum(fde_error) / total_traj
     metrics['msae'] = sum(mean_speed_disp_error) / (total_traj * PRED_LEN)
     metrics['fse'] = sum(final_speed_disp_error) / total_traj
 
@@ -321,7 +385,7 @@ def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake
     return g_l2_loss_abs, g_l2_loss_rel
 
 
-def cal_ade(pred_traj_gt, pred_traj_fake, label):
+def get_diff_traj(pred_traj_gt, pred_traj_fake, label):
     vehicle_gt_list, vehicle_pred_list, ped_gt_list, \
     ped_pred_list, cycle_gt_list, cycle_pred_list = [], [], [], [], [], []
     for a,b,c in zip(pred_traj_gt, pred_traj_fake, label):
@@ -335,15 +399,18 @@ def cal_ade(pred_traj_gt, pred_traj_fake, label):
             elif torch.eq(c, 0.4):
                 cycle_gt_list.append(a)
                 cycle_pred_list.append(b)
-    veh_ade, veh_count = displacement_error(torch.cat(vehicle_pred_list, dim=0).view(PRED_LEN, -1, 2), torch.cat(vehicle_gt_list, dim=0).view(PRED_LEN, -1, 2))
-    ped_ade, ped_count = displacement_error(torch.cat(ped_pred_list, dim=0).view(PRED_LEN, -1, 2), torch.cat(ped_gt_list, dim=0).view(PRED_LEN, -1, 2))
-    cyc_ade, cyc_count = displacement_error(torch.cat(cycle_pred_list).view(PRED_LEN, -1, 2), torch.cat(cycle_gt_list).view(PRED_LEN, -1, 2))
-    return veh_ade, ped_ade, cyc_ade, veh_count, ped_count, cyc_count
+    veh_fake, veh_gt = torch.cat(vehicle_pred_list, dim=0).view(PRED_LEN, -1, 2), torch.cat(vehicle_gt_list, dim=0).view(PRED_LEN, -1, 2)
+    ped_fake, ped_gt = torch.cat(ped_pred_list, dim=0).view(PRED_LEN, -1, 2), torch.cat(ped_gt_list, dim=0).view(PRED_LEN, -1, 2)
+    cyc_fake, cyc_gt = torch.cat(cycle_pred_list).view(PRED_LEN, -1, 2), torch.cat(cycle_gt_list).view(PRED_LEN, -1, 2)
+    return veh_fake, veh_gt, ped_fake, ped_gt, cyc_fake, cyc_gt
 
 
-def cal_fde(pred_traj_gt, pred_traj_fake, label):
-    fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])
-    return fde
+#def cal_ade(pred_traj_gt, pred_traj_fake):
+#    return displacement_error(pred_traj_fake, pred_traj_gt)
+
+
+#def cal_fde(pred_traj_gt, pred_traj_fake):
+#    return final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])
 
 
 def cal_msae(real_speed, fake_traj):

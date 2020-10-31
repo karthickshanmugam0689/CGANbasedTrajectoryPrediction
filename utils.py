@@ -42,12 +42,12 @@ def displacement_error(pred_traj, pred_traj_gt, consider_ped=None, mode='sum'):
     else:
         loss = torch.sqrt(loss.sum(dim=2)).sum(dim=1)
     if mode == 'sum':
-        return torch.sum(loss)
+        return torch.sum(loss), count
     elif mode == 'raw':
         return loss, count
 
 
-def final_displacement_error(pred_pos, pred_pos_gt, label, consider_ped=None, mode='sum'):
+def final_displacement_error(pred_pos, pred_pos_gt, consider_ped=None, mode='sum'):
     loss = pred_pos_gt - pred_pos
     loss = loss ** 2
     if consider_ped is not None:

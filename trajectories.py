@@ -61,9 +61,9 @@ def read_file(_path, delim='\t'):
     data = []
     with open(_path, 'r') as f:
         for line in f:
-            line = line.strip().split(' ')
+            line = line.strip().split('\t')
             line = [float(i) for i in line]
-            data.append(line)
+            data.append(line[:5])
     return np.asarray(data)
 
 

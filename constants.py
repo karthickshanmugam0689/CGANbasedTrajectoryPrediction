@@ -1,9 +1,9 @@
 # DATASET OPTIONS
 OBS_LEN = 6
 PRED_LEN = 6
-TRAIN_DATASET_PATH = 'Cross_Domain_Dataset/train'
+TRAIN_DATASET_PATH = 'CrossDomainDatasetTest/prediction_train'
 VAL_DATASET_PATH = 'Cross_Domain_Dataset/val'
-TEST_DATASET_PATH = 'Cross_Domain_Dataset/test'
+TEST_DATASET_PATH = 'CrossDomainDatasetTest/prediction_test'
 CHECKPOINT_NAME = 'Checkpoints/ApolloScape_Dataset/model_checkpoint.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
@@ -30,7 +30,8 @@ H_DIM_DIS = 64
 
 # HYPER PARAMETERS OPTIONS
 G_LEARNING_RATE, D_LEARNING_RATE = 1e-3, 1e-3
-NUM_LAYERS = 1
+NUM_LAYERS = 2
+NUM_LAYERS_DECODER = 1
 DROPOUT = 0
 NUM_EPOCHS = 200
 CHECKPOINT_EVERY = 50
@@ -65,7 +66,7 @@ MAX_SPEED = 0.9999
 G_STEPS = 1
 D_STEPS = 2
 BEST_K = 10
-PRINT_EVERY = 10
+PRINT_EVERY = 100
 NUM_SAMPLES = 20
 NUM_SAMPLES_CHECK = 5000
 NOISE = True

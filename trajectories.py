@@ -150,6 +150,9 @@ class TrajectoryDataset(Dataset):
                     curr_ped_abs_speed = curr_ped_dist / 0.4
                     curr_ped_abs_speed = [sigmoid(x) for x in curr_ped_abs_speed]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
+                    extrapolate_condition = all(i > 0.8755 for i in curr_ped_abs_speed)
+                    if extrapolate_condition:
+                        continue
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)
 
                     curr_ped_seq = np.transpose(curr_ped_seq[:, 2:])

@@ -61,7 +61,7 @@ def read_file(_path, delim='\t'):
     data = []
     with open(_path, 'r') as f:
         for line in f:
-            line = line.strip().split('\t')
+            line = line.strip().split(' ')
             line = [float(i) for i in line]
             data.append(line[:5])
     return np.asarray(data)
@@ -73,7 +73,7 @@ def get_min_max_distance(seq_len, all_files):
     #big_vehicle_speed = []
     #cyclist_speed = []
     #other_speed = []
-    all_speed = []
+    all_speed, cyclist_speed, ped_speed, vehicle_speed, other_speed = [], [], [], [], []
     for path in all_files:
         data = read_file(path, ' ')
         frames = np.unique(data[:, 0]).tolist()
@@ -99,24 +99,29 @@ def get_min_max_distance(seq_len, all_files):
                 curr_obj_dist = np.sqrt(np.add(curr_obj_x_axis, curr_obj_y_axis))
                 curr_obj_speed = curr_obj_dist / 0.5
                 all_speed.append(curr_obj_speed)
-                #if label == 4:
-                #    cyclist_speed.append(np.max(curr_obj_speed))
-                #    cyclist_speed.append(np.min(curr_obj_speed))
-                #elif label == 3:
-                #    ped_speed.append(np.max(curr_obj_speed))
-                #    ped_speed.append(np.min(curr_obj_speed))
-                #elif label == 1:
-                #    small_vehicle_speed.append(np.max(curr_obj_speed))
-                #    small_vehicle_speed.append(np.min(curr_obj_speed))
+                if label == 4:
+                    cyclist_speed.append(np.max(curr_obj_speed))
+                    cyclist_speed.append(np.min(curr_obj_speed))
+                elif label == 3:
+                    ped_speed.append(np.max(curr_obj_speed))
+                    ped_speed.append(np.min(curr_obj_speed))
+                elif label == 1 or label == 2:
+                    vehicle_speed.append(np.max(curr_obj_speed))
+                    vehicle_speed.append(np.min(curr_obj_speed))
                 #elif label == 2:
                 #    big_vehicle_speed.append(np.max(curr_obj_speed))
                 #    big_vehicle_speed.append(np.min(curr_obj_speed))
-                #else:
-                #    other_speed.append(np.max(curr_obj_speed))
-                #    other_speed.append(np.min(curr_obj_speed))
+
     all_speed = np.concatenate(all_speed, axis=0)
     max_speed = np.amax(all_speed)
     min_speed = np.min(all_speed)
+
+    max_ped_speed = np.amax(ped_speed)
+    min_ped_speed = np.min(ped_speed)
+    max_veh_speed = np.amax(vehicle_speed)
+    min_veh_speed = np.min(vehicle_speed)
+    max_cyc_speed = np.amax(cyclist_speed)
+    min_cyc_speed = np.min(cyclist_speed)
     #ped_speed = np.array(ped_speed).reshape(-1, 1)
     #small_vehicle_speed = np.array(small_vehicle_speed).reshape(-1, 1)
     #big_vehicle_speed = np.array(big_vehicle_speed).reshape(-1, 1)

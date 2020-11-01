@@ -91,9 +91,9 @@ def evaluate(loader, generator, num_samples):
         cyc_ade = sum(cyc_disp_error_outer) / (sum(cyc_traj) * PRED_LEN)
         cyc_fde = sum(cyc_f_disp_error_outer) / (sum(cyc_traj))
 
-        if TEST_METRIC:
-            with open('ResultTrajectories.pkl', 'wb') as f:
-                pickle.dump(simulated_output, f, pickle.HIGHEST_PROTOCOL)
+        #if TEST_METRIC:
+        #    with open('ResultTrajectories.pkl', 'wb') as f:
+        #        pickle.dump(simulated_output, f, pickle.HIGHEST_PROTOCOL)
         return ade, fde, veh_ade, veh_fde, ped_ade, ped_fde, cyc_ade, cyc_fde
 
 

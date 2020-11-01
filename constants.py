@@ -31,7 +31,6 @@ H_DIM_DIS = 64
 # HYPER PARAMETERS OPTIONS
 G_LEARNING_RATE, D_LEARNING_RATE = 1e-3, 1e-3
 NUM_LAYERS = 2
-NUM_LAYERS_DECODER = 1
 DROPOUT = 0
 NUM_EPOCHS = 200
 CHECKPOINT_EVERY = 50
@@ -39,7 +38,7 @@ MLP_DIM = 64
 EMBEDDING_DIM = 16
 BOTTLENECK_DIM = 32
 NOISE_DIM = (8, )
-DECODER_TIMESTEP_POOLING = False
+DECODER_TIMESTEP_POOLING = True
 L2_LOSS_WEIGHT = 1
 
 NUM_ITERATIONS = 3200
@@ -47,14 +46,14 @@ POOLING_TYPE = True
 USE_GPU = 0
 
 # SPEED CONTROL FLAGS
-TEST_METRIC = 0  # 0 for ground_truth speed. To simulate trajectories, change the flag to 1. This flag is used during testing and inference phase.
+TEST_METRIC = 1  # 0 for ground_truth speed. To simulate trajectories, change the flag to 1. This flag is used during testing and inference phase.
 TRAIN_METRIC = 0  # Used for training the model with the ground truth
 
 # ADD_SPEED_EVERY_FRAME, STOP_PED, CONSTANT_SPEED_FOR_ALL_PED, ADD_SPEED_PARTICULAR_FRAME - Only one flag out of the 4 can be activated at once.
-ADD_SPEED_EVERY_FRAME = True  # SPEED_TO_ADD will be active if ADD_SPEED_EVERY_FRAME is True
+ADD_SPEED_EVERY_FRAME = False  # SPEED_TO_ADD will be active if ADD_SPEED_EVERY_FRAME is True
 SPEED_TO_ADD = 0.1
 
-STOP_PED = False  # Makes the speed value as 0
+STOP_PED = True  # Makes the speed value as 0
 
 CONSTANT_SPEED_FOR_ALL_PED = False  # CONSTANT_SPEED flag will be active only if CONSTANT_SPEED_FOR_ALL_PED is True
 CONSTANT_SPEED = 0.5

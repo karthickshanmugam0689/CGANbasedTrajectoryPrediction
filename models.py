@@ -31,8 +31,8 @@ class Encoder(nn.Module):
 
         self.encoder = nn.LSTM(EMBEDDING_DIM, h_dim, NUM_LAYERS, dropout=DROPOUT)
 
-        self.spatial_embedding = nn.Sequential(nn.Linear(4, EMBEDDING_DIM * 2), nn.LeakyReLU(),
-                                               nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
+        mlp_dims = [4, 512, EMBEDDING_DIM]
+        self.spatial_embedding = make_mlp(mlp_dims, activation=ACTIVATION_LEAKYRELU, batch_norm=BATCH_NORM, dropout=DROPOUT)
 
     def init_hidden(self, batch):
         if USE_GPU == 1:
@@ -72,10 +72,11 @@ class Decoder(nn.Module):
         self.decoder = nn.LSTM(EMBEDDING_DIM, H_DIM, NUM_LAYERS, dropout=DROPOUT)
 
         mlp_dims = [H_DIM*2 + BOTTLENECK_DIM, MLP_DIM, H_DIM*2]
-        self.mlp = make_mlp(mlp_dims, activation=ACTIVATION, batch_norm=BATCH_NORM, dropout=DROPOUT)
+        self.mlp = make_mlp(mlp_dims, activation=ACTIVATION_RELU, batch_norm=BATCH_NORM, dropout=DROPOUT)
 
-        self.spatial_embedding = nn.Sequential(nn.Linear(4, EMBEDDING_DIM * 2), nn.LeakyReLU(),
-                                               nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
+        spatial_dims = [4, 512, EMBEDDING_DIM]
+        self.spatial_embedding = make_mlp(spatial_dims, activation=ACTIVATION_LEAKYRELU, batch_norm=BATCH_NORM, dropout=DROPOUT)
+
         self.hidden2pos = nn.Linear(H_DIM, 2)
         self.pool_net = SocialSpeedPoolingModule()
 
@@ -104,7 +105,7 @@ class Decoder(nn.Module):
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
             if DECODER_TIMESTEP_POOLING:
-                pool_h = self.pool_net(state_tuple[0].view(batch, -1), seq_start_end, train_or_test, speed_to_add, curr_pos, speed, pred_label[0, :, :])
+                pool_h = self.pool_net(state_tuple[0].view(batch, -1), seq_start_end, train_or_test, speed_to_add, curr_pos, speed)
                 decoder_h = torch.cat([state_tuple[0].view(batch, self.h_dim*NUM_LAYERS), pool_h], dim=1)
                 decoder_h = self.mlp(decoder_h)
                 state_tuple = (decoder_h.view(NUM_LAYERS, batch, -1), state_tuple[1])
@@ -127,11 +128,10 @@ class SocialSpeedPoolingModule(nn.Module):
         self.embedding_dim = EMBEDDING_DIM
 
         mlp_pre_dim = self.embedding_dim + self.h_dim*2
-        mlp_pre_pool_dims = [mlp_pre_dim, 512, BOTTLENECK_DIM]
+        mlp_pre_pool_dims = [mlp_pre_dim, 1024, BOTTLENECK_DIM]
 
-        self.pos_embedding = nn.Sequential(nn.Linear(4, EMBEDDING_DIM * 2), nn.LeakyReLU(),
-                                           nn.Linear(EMBEDDING_DIM * 2, EMBEDDING_DIM))
-        self.mlp_pre_pool = make_mlp(mlp_pre_pool_dims, activation='leakyrelu', batch_norm=BATCH_NORM, dropout=DROPOUT)
+        self.pos_embedding = nn.Linear(3, EMBEDDING_DIM)
+        self.mlp_pre_pool = make_mlp(mlp_pre_pool_dims, activation=ACTIVATION_LEAKYRELU, batch_norm=BATCH_NORM, dropout=DROPOUT)
 
     def forward(self, h_states, seq_start_end, train_or_test, speed_to_add, last_pos, speed, label,
                 ped_features=None):
@@ -143,17 +143,17 @@ class SocialSpeedPoolingModule(nn.Module):
             curr_hidden_ped = h_states[start:end]
             repeat_hstate = curr_hidden_ped.repeat(num_ped, 1).view(num_ped, num_ped, -1)
 
-            feature = torch.cat([last_pos[start:end], speed[start:end], label[start:end]], dim=1)
+            feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
             if train_or_test == 1:
                 speed = speed_control(speed, SPEED_TO_ADD, seq_start_end, label[start:end])
-                feature = torch.cat([last_pos[start:end], speed[start:end], label[start:end]], dim=1)
+                feature = torch.cat([last_pos[start:end], speed[start:end]], dim=1)
             curr_end_pos_1 = feature.repeat(num_ped, 1)
-            curr_end_pos_2 = feature.unsqueeze(dim=1).repeat(1, num_ped, 1).view(-1, 4)
+            curr_end_pos_2 = feature.unsqueeze(dim=1).repeat(1, num_ped, 1).view(-1, 3)
             social_features = curr_end_pos_1[:, :2] - curr_end_pos_2[:, :2]
-            social_features_with_speed = torch.cat([social_features, curr_end_pos_1[:, 2].view(-1, 1), curr_end_pos_1[:, 3].view(-1, 1)], dim=1)
+            social_features_with_speed = torch.cat([social_features, curr_end_pos_1[:, 2].view(-1, 1)], dim=1)
 
             # POSITION SPEED Pooling
-            position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 4))
+            position_feature_embedding = self.pos_embedding(social_features_with_speed.contiguous().view(-1, 3))
             pos_mlp_input = torch.cat(
                 [repeat_hstate.view(-1, self.h_dim*2), position_feature_embedding.view(-1, self.embedding_dim)], dim=1)
             pos_attn_h = self.mlp_pre_pool(pos_mlp_input)
@@ -204,11 +204,11 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, label, id=
             speed_to_add = 0.1
             for a, b in zip(range(start, end), label):
                 if b == 0.1 or b == 0.2:
-                    pred_traj_first_speed[a] = 0.5
+                    pred_traj_first_speed[a] = sigmoid(3)
                 elif b == 0.3:
-                    pred_traj_first_speed[a] = 0.1
+                    pred_traj_first_speed[a] = sigmoid(0.5)
                 elif b == 0.4:
-                    pred_traj_first_speed[a] = 0.2
+                    pred_traj_first_speed[a] = sigmoid(1)
                 #pred_traj_first_speed[a] = sigmoid(speed_to_add)
         elif CONSTANT_SPEED_FOR_ALL_PED:
             # To make all pedestrians travel at same and constant speed throughout
@@ -240,7 +240,7 @@ class TrajectoryGenerator(nn.Module):
         else:
             mlp_decoder_context_dims = [H_DIM*2, MLP_DIM, H_DIM*2 - self.noise_first_dim]
 
-        self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation=ACTIVATION, batch_norm=BATCH_NORM,
+        self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims, activation=ACTIVATION_RELU, batch_norm=BATCH_NORM,
                                             dropout=DROPOUT)
 
     def add_noise(self, _input, seq_start_end):
@@ -267,7 +267,7 @@ class TrajectoryGenerator(nn.Module):
             else:
                 next_speed = pred_ped_speed[0, :, :]
             sspm = self.social_speed_pooling(final_encoder_h, seq_start_end, train_or_test, speed_to_add,
-                                             obs_traj[-1, :, :], next_speed, obs_label[-1, :, :], ped_features=pred_label)
+                                             obs_traj[-1, :, :], next_speed, pred_label[0, :, :], ped_features=pred_label)
             mlp_decoder_context_input = torch.cat([final_encoder_h.view(-1, self.h_dim*2), sspm], dim=1)
         else:
             mlp_decoder_context_input = final_encoder_h.view(-1, self.h_dim)
@@ -275,7 +275,10 @@ class TrajectoryGenerator(nn.Module):
         noise_input = self.mlp_decoder_context(mlp_decoder_context_input)
 
         decoder_h = self.add_noise(noise_input, seq_start_end).view(NUM_LAYERS, batch, -1)
-        decoder_c = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+        if USE_GPU:
+            decoder_c = torch.zeros(self.num_layers, batch, self.h_dim).cuda()
+        else:
+            decoder_c = torch.zeros(self.num_layers, batch, self.h_dim)
         state_tuple = (decoder_h, decoder_c)
 
         decoder_out = self.decoder(
@@ -298,7 +301,7 @@ class TrajectoryGenerator(nn.Module):
                 end = end.item()
                 obs_test_traj = obs_traj[:, start:end, :]
                 pred_test_traj_rel = pred_traj_fake_rel[:, start:end, :]
-                label = pred_label[0, start:end, :]
+                label = pred_label[:, start:end, :]
                 pred_test_traj = relative_to_abs(pred_test_traj_rel, obs_test_traj[-1])
                 #speed_added = next_speed[start:end, :]
                 seq_tuple = (start, end)
@@ -316,12 +319,7 @@ class TrajectoryDiscriminator(nn.Module):
         self.encoder = Encoder(h_dim=H_DIM_DIS)
 
         real_classifier_dims = [H_DIM_DIS*2, MLP_DIM, 1]
-        self.real_classifier = make_mlp(
-            real_classifier_dims,
-            activation=ACTIVATION,
-            batch_norm=BATCH_NORM,
-            dropout=DROPOUT
-        )
+        self.real_classifier = make_mlp(real_classifier_dims, activation=ACTIVATION_RELU, batch_norm=BATCH_NORM, dropout=DROPOUT)
 
     def forward(self, traj, traj_rel, ped_speed, label_info, seq_start_end=None):
         final_h = self.encoder(traj_rel, ped_speed, label_info)  # final layer of the encoder is returned

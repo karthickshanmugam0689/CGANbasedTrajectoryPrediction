@@ -198,8 +198,10 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
     scores_real = discriminator(traj_real, traj_real_rel, ped_speed, label_info, seq_start_end)
 
     data_loss = d_loss_fn(scores_real, scores_fake)
+    dis_ade, _ = displacement_error(pred_traj_fake, pred_traj_gt)
+    total_loss = data_loss + dis_ade
     losses['D_data_loss'] = data_loss.item()
-    loss += data_loss
+    loss += total_loss
     losses['D_total_loss'] = loss.item()
 
     optimizer_d.zero_grad()
@@ -255,8 +257,9 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
 
     scores_fake = discriminator(traj_fake, traj_fake_rel, ped_speed, label_info, seq_start_end)
     discriminator_loss = g_loss_fn(scores_fake)
-
-    loss += discriminator_loss
+    gen_ade, _ = displacement_error(pred_traj_fake, pred_traj_gt)
+    total_loss = discriminator_loss + gen_ade
+    loss += total_loss
     losses['G_discriminator_loss'] = discriminator_loss.item()
     losses['G_total_loss'] = loss.item()
 

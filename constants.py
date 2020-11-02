@@ -4,7 +4,7 @@ PRED_LEN = 6
 TRAIN_DATASET_PATH = 'CrossDomainDatasetTest/prediction_train'
 VAL_DATASET_PATH = 'Cross_Domain_Dataset/val'
 TEST_DATASET_PATH = 'CrossDomainDatasetTest/prediction_test'
-CHECKPOINT_NAME = 'Checkpoints/ApolloScape_Dataset/model_checkpoint.pt'
+CHECKPOINT_NAME = 'Checkpoints/ApoloScape_WithAdeLoss/model_checkpoint.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
 ETH = 1
@@ -22,7 +22,8 @@ ZARA2_MAX_SPEED = 2.2537
 NUM_WORKERS = 4
 BATCH = 32
 BATCH_NORM = False
-ACTIVATION = 'relu'
+ACTIVATION_RELU = 'relu'
+ACTIVATION_LEAKYRELU = 'leakyrelu'
 
 # ENCODER DECODER HIDDEN DIMENSION OPTIONS
 H_DIM = 32
@@ -38,7 +39,7 @@ MLP_DIM = 64
 EMBEDDING_DIM = 16
 BOTTLENECK_DIM = 32
 NOISE_DIM = (8, )
-DECODER_TIMESTEP_POOLING = True
+DECODER_TIMESTEP_POOLING = False
 L2_LOSS_WEIGHT = 1
 
 NUM_ITERATIONS = 3200

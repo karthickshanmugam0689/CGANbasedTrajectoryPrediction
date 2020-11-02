@@ -220,7 +220,7 @@ class TrajectoryDataset(Dataset):
                         curr_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                         # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
                         curr_abs_speed = curr_dist / 0.5
-                        curr_abs_speed = [(x - min_speed) / (max_speed - min_speed) if x > 0 else 0 for x in curr_abs_speed]
+                        #curr_abs_speed = [(x - min_speed) / (max_speed - min_speed) if x > 0 else 0 for x in curr_abs_speed]
                         if label == 1 or label == 2:  # Small Vehicles and Big Vehicles considered as Vehcile
                             embedding_label = 0.1
                         elif label == 3:  # Pedestrians
@@ -228,8 +228,8 @@ class TrajectoryDataset(Dataset):
                         elif label == 4:  # Cyclist
                             embedding_label = 0.4
                         curr_abs_speed = np.around(curr_abs_speed, decimals=4)
-                        #curr_abs_speed = [sigmoid(x) for x in curr_abs_speed]
-                        #curr_abs_speed = np.around(curr_abs_speed, decimals=4)
+                        curr_abs_speed = [sigmoid(x/10) for x in curr_abs_speed]
+                        curr_abs_speed = np.around(curr_abs_speed, decimals=4)
                         curr_abs_speed = np.transpose(curr_abs_speed)
 
                         curr_obj_seq = np.transpose(curr_obj_seq[:, 3:5])

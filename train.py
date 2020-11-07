@@ -7,7 +7,7 @@ from constants import *
 
 from trajectories import data_loader
 from utils import gan_g_loss, gan_d_loss, l2_loss, mean_speed_error, \
-    final_speed_error, displacement_error, final_displacement_error, relative_to_abs
+    final_speed_error, displacement_error, final_displacement_error, relative_to_abs, bce_loss
 
 from models import TrajectoryGenerator, TrajectoryDiscriminator
 
@@ -25,8 +25,8 @@ def main():
     print("Process Started")
     print("Initializing train dataset")
     train_dset, train_loader = data_loader(TRAIN_DATASET_PATH, train_metric)
-    #print("Initializing val dataset")
-    #_, val_loader = data_loader(VAL_DATASET_PATH, train_metric)
+    print("Initializing val dataset")
+    _, val_loader = data_loader(VAL_DATASET_PATH, train_metric)
 
     iterations_per_epoch = len(train_dset) / BATCH / D_STEPS
     if NUM_EPOCHS:
@@ -35,20 +35,14 @@ def main():
         generator = TrajectoryGenerator()
 
         generator.apply(init_weights)
-        if USE_GPU == 0:
-            generator.type(torch.FloatTensor).train()
-        else:
-            generator.type(torch.cuda.FloatTensor).train()
-        print('Here is the generator:')
+        generator.type(torch.FloatTensor).train()
         print(generator)
 
         discriminator = TrajectoryDiscriminator()
 
         discriminator.apply(init_weights)
-        if USE_GPU == 0:
-            discriminator.type(torch.FloatTensor).train()
-        else:
-            discriminator.type(torch.cuda.FloatTensor).train()
+        discriminator.type(torch.FloatTensor).train()
+
         print('Here is the discriminator:')
         print(discriminator)
 
@@ -95,45 +89,45 @@ def main():
                 for k, v in sorted(losses_g.items()):
                     print('  [G] {}: {:.3f}'.format(k, v))
 
-                #print('Checking stats on val ...')
-                #metrics_val = check_accuracy(val_loader, generator, discriminator, d_loss_fn)
+                print('Checking stats on val ...')
+                metrics_val = check_accuracy(val_loader, generator, discriminator, d_loss_fn)
                 print('Checking stats on train ...')
                 metrics_train = check_accuracy(train_loader, generator, discriminator, d_loss_fn)
 
-                #for k, v in sorted(metrics_val.items()):
-                #    print('  [val] {}: {:.3f}'.format(k, v))
+                for k, v in sorted(metrics_val.items()):
+                    print('  [val] {}: {:.3f}'.format(k, v))
                 for k, v in sorted(metrics_train.items()):
                     print('  [train] {}: {:.3f}'.format(k, v))
 
-                wa_ade_list.append(metrics_train['WSADE'])
-                wa_fde_list.append(metrics_train['WSFDE'])
+                wa_ade_list.append(metrics_val['WSADE'])
+                wa_fde_list.append(metrics_val['WSFDE'])
 
-                ade_list.append(metrics_train['ade'])
-                fde_list.append(metrics_train['fde'])
+                ade_list.append(metrics_val['ade'])
+                fde_list.append(metrics_val['fde'])
 
                 # VEHICLE PARAMS
-                veh_ade_list.append(metrics_train['veh_ade'])
-                veh_fde_list.append(metrics_train['veh_fde'])
+                veh_ade_list.append(metrics_val['veh_ade'])
+                veh_fde_list.append(metrics_val['veh_fde'])
 
                 # PEDESTRIAN PARAMS
-                ped_ade_list.append(metrics_train['ped_ade'])
-                ped_fde_list.append(metrics_train['ped_fde'])
+                ped_ade_list.append(metrics_val['ped_ade'])
+                ped_fde_list.append(metrics_val['ped_fde'])
 
                 # BICYCLIST PARAMS
-                cyc_ade_list.append(metrics_train['cyc_ade'])
-                cyc_fde_list.append(metrics_train['cyc_fde'])
+                cyc_ade_list.append(metrics_val['cyc_ade'])
+                cyc_fde_list.append(metrics_val['cyc_fde'])
 
-                avg_speed_error.append(metrics_train['msae'])
-                f_speed_error.append(metrics_train['fse'])
+                avg_speed_error.append(metrics_val['msae'])
+                f_speed_error.append(metrics_val['fse'])
 
-                if metrics_train.get('WSADE') == min(wa_ade_list) or metrics_train['WSADE'] < min(wa_ade_list):
+                if metrics_val.get('WSADE') == min(wa_ade_list) or metrics_val['WSADE'] < min(wa_ade_list):
                     print('New low for wa_avg_disp_error')
-                if metrics_train.get('WSFDE') == min(wa_fde_list) or metrics_train['WSFDE'] < min(wa_fde_list):
+                if metrics_val.get('WSFDE') == min(wa_fde_list) or metrics_val['WSFDE'] < min(wa_fde_list):
                     print('New low for wa_final_disp_error')
 
-                if metrics_train.get('ade') == min(ade_list) or metrics_train['ade'] < min(ade_list):
+                if metrics_val.get('ade') == min(ade_list) or metrics_val['ade'] < min(ade_list):
                     print('New low for avg_disp_error')
-                if metrics_train.get('fde') == min(fde_list) or metrics_train['fde'] < min(fde_list):
+                if metrics_val.get('fde') == min(fde_list) or metrics_val['fde'] < min(fde_list):
                     print('New low for final_disp_error')
 
                 #if metrics_val.get('veh_ade') == min(veh_ade_list) or metrics_val['veh_ade'] < min(veh_ade_list):
@@ -172,10 +166,7 @@ def main():
 
 def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
     """This step is similar to Social GAN Code"""
-    if USE_GPU:
-        batch = [tensor.cuda() for tensor in batch]
-    else:
-        batch = [tensor for tensor in batch]
+    batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed,
      obs_label, pred_label) = batch
     losses = {}
@@ -213,10 +204,7 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
 
 def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
     """This step is similar to Social GAN Code"""
-    if USE_GPU:
-        batch = [tensor.cuda() for tensor in batch]
-    else:
-        batch = [tensor for tensor in batch]
+    batch = [tensor for tensor in batch]
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed,
      obs_label, pred_label) = batch
 
@@ -283,10 +271,7 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
     generator.eval()
     with torch.no_grad():
         for batch in loader:
-            if USE_GPU:
-                batch = [tensor.cuda() for tensor in batch]
-            else:
-                batch = [tensor for tensor in batch]
+            batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed,
              pred_ped_speed, obs_label, pred_label) = batch
 
@@ -408,14 +393,6 @@ def get_diff_traj(pred_traj_gt, pred_traj_fake, label):
     return veh_fake, veh_gt, ped_fake, ped_gt, cyc_fake, cyc_gt
 
 
-#def cal_ade(pred_traj_gt, pred_traj_fake):
-#    return displacement_error(pred_traj_fake, pred_traj_gt)
-
-
-#def cal_fde(pred_traj_gt, pred_traj_fake):
-#    return final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])
-
-
 def cal_msae(real_speed, fake_traj):
     fake_output_speed = fake_speed(fake_traj)
     real_speed = real_speed.permute(1, 0, 2)
@@ -427,7 +404,7 @@ def fake_speed(fake_traj):
     output_speed = []
     for a, b in zip(fake_traj[:, :], fake_traj[1:, :]):
         dist = torch.pairwise_distance(a, b)
-        speed = dist / 0.4
+        speed = dist / 0.5
         output_speed.append(speed.view(1, -1))
     output_fake_speed = torch.cat(output_speed, dim=0).unsqueeze(dim=2).permute(1, 0, 2)
     return output_fake_speed

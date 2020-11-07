@@ -237,10 +237,6 @@ class TrajectoryDataset(Dataset):
                         rel_curr_obj_seq = np.zeros(curr_obj_seq.shape)
                         rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1]
                         _idx = num_peds_considered
-                        if pad_end - pad_front == 11:
-                            print("hi")
-                        if curr_obj_seq.shape[1] == 11:
-                            print("hiiiii")
                         curr_seq[_idx, :, pad_front:pad_end] = curr_obj_seq
                         curr_seq_rel[_idx, :, pad_front:pad_end] = rel_curr_obj_seq
                         # Linear vs Non-Linear Trajectory

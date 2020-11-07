@@ -30,11 +30,6 @@ def evaluate(loader, generator, num_samples):
 
             ade, veh_disp_error, ped_disp_error, cyc_disp_error = [], [], [], []
             fde, veh_f_disp_error, ped_f_disp_error, cyc_f_disp_error = [], [], [], []
-            total_traj.append(pred_traj_gt.size(1))
-            _, _veh_gt, _, _ped_gt, _, _cyc_gt = get_diff_traj(pred_traj_gt, pred_traj_gt, pred_label)
-            veh_traj.append(_veh_gt.size(1))
-            ped_traj.append(_ped_gt.size(1))
-            cyc_traj.append(_cyc_gt.size(1))
 
             for _ in range(num_samples):
                 if TEST_METRIC == 1:
@@ -46,21 +41,22 @@ def evaluate(loader, generator, num_samples):
                 pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
                 veh_fake, veh_gt, ped_fake, ped_gt, cyc_fake, cyc_gt = get_diff_traj(pred_traj_gt, pred_traj_fake, pred_label)
-                _, veh_count, _ = veh_fake.size()
-                _, ped_count, _ = ped_fake.size()
-                _, cyc_count, _ = cyc_fake.size()
 
-                veh_disp, _ = displacement_error(veh_fake, veh_gt, mode='raw')
+                veh_disp, veh_count = displacement_error(veh_fake, veh_gt, mode='raw')
                 veh_disp_error.append(veh_disp)
+                veh_traj.append(veh_count)
 
-                ped_disp, _ = displacement_error(ped_fake, ped_gt, mode='raw')
+                ped_disp, ped_count = displacement_error(ped_fake, ped_gt, mode='raw')
                 ped_disp_error.append(ped_disp)
+                ped_traj.append(ped_count)
 
-                cyc_disp, _ = displacement_error(cyc_fake, cyc_gt, mode='raw')
+                cyc_disp, cyc_count = displacement_error(cyc_fake, cyc_gt, mode='raw')
                 cyc_disp_error.append(cyc_disp)
+                cyc_traj.append(cyc_count)
 
-                overall_disp, _ = displacement_error(pred_traj_fake, pred_traj_gt, mode='raw')
-                ade.append(overall_disp)
+                overall_ade, all_count = displacement_error(pred_traj_fake, pred_traj_gt, mode='raw')
+                ade.append(overall_ade)
+                total_traj.append(all_count)
 
                 veh_f_disp_error.append(final_displacement_error(veh_fake[-1], veh_gt[-1], mode='raw'))
                 ped_f_disp_error.append(final_displacement_error(ped_fake[-1], ped_gt[-1], mode='raw'))
@@ -91,10 +87,12 @@ def evaluate(loader, generator, num_samples):
         cyc_ade = sum(cyc_disp_error_outer) / (sum(cyc_traj) * PRED_LEN)
         cyc_fde = sum(cyc_f_disp_error_outer) / (sum(cyc_traj))
 
+        weighted_ade = VEHICLE_COE * veh_ade + BICYCLE_COE * cyc_ade + PEDESTRIAN_COE * ped_ade
+        weighted_fde = VEHICLE_COE * veh_fde + BICYCLE_COE * cyc_fde + PEDESTRIAN_COE * ped_fde
         #if TEST_METRIC:
         #    with open('ResultTrajectories.pkl', 'wb') as f:
         #        pickle.dump(simulated_output, f, pickle.HIGHEST_PROTOCOL)
-        return ade, fde, veh_ade, veh_fde, ped_ade, ped_fde, cyc_ade, cyc_fde
+        return ade.item(), fde.item(), weighted_ade.item(), weighted_fde.item()
 
 
 def get_dataset_name(path):
@@ -118,8 +116,8 @@ def main():
         num_samples = 1
     else:
         num_samples = NUM_SAMPLES
-    ade, fde, veh_ade, veh_fde, ped_ade, ped_fde, cyc_ade, cyc_fde = evaluate(loader, generator, num_samples)
-    print('Dataset: {}, Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}'.format(dataset_name, PRED_LEN, ade, fde))
+    ade, fde, weighted_ade, weighted_fde = evaluate(loader, generator, num_samples)
+    print('Dataset: {}, Pred Len: {}, ADE: {:.2f}, FDE: {:.2f}, Weighted_ADE: {:.2f}, Weighted_FDE: {:.2f}'.format(dataset_name, PRED_LEN, ade, fde, weighted_ade, weighted_fde))
 
 
 if __name__ == '__main__':

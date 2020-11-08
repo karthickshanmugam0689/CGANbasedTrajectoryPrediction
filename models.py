@@ -99,7 +99,7 @@ class Decoder(nn.Module):
             decoder_input = decoder_input.view(1, batch, self.embedding_dim)
 
             if DECODER_TIMESTEP_POOLING:
-                pool_h = self.pool_net(state_tuple[0].view(batch, -1), seq_start_end, train_or_test, speed_to_add, curr_pos, speed)
+                pool_h = self.pool_net(state_tuple[0].view(batch, -1), seq_start_end, train_or_test, speed_to_add, curr_pos, speed, pred_label[id, :, :])
                 decoder_h = torch.cat([state_tuple[0].view(batch, self.h_dim*NUM_LAYERS), pool_h], dim=1)
                 decoder_h = self.mlp(decoder_h)
                 state_tuple = (decoder_h.view(NUM_LAYERS, batch, -1), state_tuple[1])
@@ -198,11 +198,11 @@ def speed_control(pred_traj_first_speed, speed_to_add, seq_start_end, label, id=
             speed_to_add = 0.1
             for a, b in zip(range(start, end), label):
                 if b == 0.1 or b == 0.2:
-                    pred_traj_first_speed[a] = sigmoid(0)
+                    pred_traj_first_speed[a] = sigmoid(14.4)
                 elif b == 0.3:
-                    pred_traj_first_speed[a] = sigmoid(5)
+                    pred_traj_first_speed[a] = sigmoid(2.6)
                 elif b == 0.4:
-                    pred_traj_first_speed[a] = sigmoid(3)
+                    pred_traj_first_speed[a] = sigmoid(4.3)
                 #pred_traj_first_speed[a] = sigmoid(speed_to_add)
         elif CONSTANT_SPEED_FOR_ALL_PED:
             # To make all pedestrians travel at same and constant speed throughout
@@ -282,18 +282,21 @@ class TrajectoryGenerator(nn.Module):
         pred_traj_fake_rel, final_decoder_h = decoder_out
 
         # LOGGING THE OUTPUT OF ALL SEQUENCES TO TEST THE SPEED AND TRAJECTORIES
-        if train_or_test == 1:
+        if train_or_test == 0:
             outputs = {}
             for _, (start, end) in enumerate(seq_start_end):
                 start = start.item()
                 end = end.item()
                 obs_test_traj = obs_traj[:, start:end, :]
                 pred_test_traj_rel = pred_traj_fake_rel[:, start:end, :]
-                label = pred_label[0, start:end, :]
+                label = pred_label[:, start:end, :]
                 pred_test_traj = relative_to_abs(pred_test_traj_rel, obs_test_traj[-1])
+                pred_traj_gt = pred_traj[:, start:end, :]
                 speed_added = pred_ped_speed[:, start:end, :]
                 seq_tuple = (start, end)
+                comb = torch.cat([pred_traj_gt, pred_test_traj, label], dim=2)
                 print(speed_added, pred_test_traj)
+                print(comb)
                 outputs[seq_tuple] = pred_test_traj
         else:
             outputs = None

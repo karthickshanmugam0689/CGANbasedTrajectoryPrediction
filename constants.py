@@ -4,7 +4,7 @@ PRED_LEN = 6
 TRAIN_DATASET_PATH = 'Cross_Domain_Dataset/train'
 VAL_DATASET_PATH = 'Cross_Domain_Dataset/val'
 TEST_DATASET_PATH = 'Cross_Domain_Dataset/test'
-CHECKPOINT_NAME = 'Checkpoints/ApolloScape_Dataset/chkpt_200epoch_withBothLoss.pt'
+CHECKPOINT_NAME = 'Checkpoints/ApolloScape_Dataset/chkpt_200epoch_withDecoderPooling.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
 PED_MAX_SPEED = 26.09
@@ -32,7 +32,7 @@ MLP_DIM = 64
 EMBEDDING_DIM = 16
 BOTTLENECK_DIM = 32
 NOISE_DIM = (8, )
-DECODER_TIMESTEP_POOLING = False
+DECODER_TIMESTEP_POOLING = True
 L2_LOSS_WEIGHT = 1
 
 NUM_ITERATIONS = 3200
@@ -60,7 +60,7 @@ G_STEPS = 1
 D_STEPS = 2
 BEST_K = 10
 PRINT_EVERY = 100
-NUM_SAMPLES = 10
+NUM_SAMPLES = 20
 NUM_SAMPLES_CHECK = 5000
 NOISE = True
 NUM_SAMPLE_CHECK = 5000

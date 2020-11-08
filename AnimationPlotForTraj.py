@@ -2,21 +2,80 @@ import numpy as np
 import pickle
 from matplotlib import pyplot as plt
 from matplotlib import animation
+import torch
+import torch.nn as nn
 
-with open('ResultTrajectories.pkl', 'rb') as f:
-    a = pickle.load(f)
-    for b in a:
-        print(b.keys())
-        print("Enter the sequence you want to visualize")
-        seq_start = int(input("Enter the sequence start: "))
-        seq_end = int(input("Enter the sequence end:"))
-        positions = b.get((seq_start, seq_end))
-        if positions.size(0) > 0:
-            break
+#with open('ResultTrajectories.pkl', 'rb') as f:
+#    a = pickle.load(f)
+#    for b in a:
+#        print(b.keys())
+#        print("Enter the sequence you want to visualize")
+#        seq_start = int(input("Enter the sequence start: "))
+#        seq_end = int(input("Enter the sequence end:"))
+#        positions = b.get((seq_start, seq_end))
+#        if positions.size(0) > 0:
+#            break
 
-num_ped = positions.size(1)
+#num_ped = positions.size(1)
+positions = torch.tensor([[[1.4061e+02, 4.8783e+01, 1.3064e+02, 3.9577e+01, 1.0000e-01],
+         [1.4417e+02, 4.9550e+01, 1.3733e+02, 3.7547e+01, 1.0000e-01],
+         [1.2065e+02, 3.7090e+01, 1.1595e+02, 2.6536e+01, 4.0000e-01],
+         [1.2362e+02, 3.1976e+01, 1.2181e+02, 2.8497e+01, 4.0000e-01],
+         [1.2312e+02, 3.3863e+01, 1.2199e+02, 3.2727e+01, 1.0000e-01],
+         [1.4032e+02, 4.6803e+01, 1.3475e+02, 3.4231e+01, 1.0000e-01],
+         [1.6539e+02, 4.1548e+01, 1.6190e+02, 4.1589e+01, 1.0000e-01],
+         [1.5514e+02, 5.3879e+01, 1.5440e+02, 3.5571e+01, 4.0000e-01],
+         [1.6245e+02, 5.1464e+01, 1.4805e+02, 3.4297e+01, 3.0000e-01]],
+        [[1.4881e+02, 4.9573e+01, 1.4178e+02, 4.2053e+01, 1.0000e-01],
+         [1.5394e+02, 5.0721e+01, 1.4780e+02, 3.9458e+01, 1.0000e-01],
+         [1.2884e+02, 3.9709e+01, 1.2639e+02, 2.8572e+01, 4.0000e-01],
+         [1.1985e+02, 3.1190e+01, 1.2764e+02, 2.9837e+01, 4.0000e-01],
+         [1.3904e+02, 3.5168e+01, 1.3266e+02, 3.5009e+01, 1.0000e-01],
+         [1.4752e+02, 5.3811e+01, 1.4578e+02, 3.6443e+01, 1.0000e-01],
+         [1.7734e+02, 4.2631e+01, 1.7225e+02, 4.3688e+01, 1.0000e-01],
+         [1.6442e+02, 3.6863e+01, 1.6480e+02, 3.7285e+01, 4.0000e-01],
+         [1.6004e+02, 4.0118e+01, 1.5814e+02, 3.5971e+01, 3.0000e-01]],
+        [[1.3820e+02, 5.3282e+01, 1.5348e+02, 4.4684e+01, 1.0000e-01],
+         [1.4429e+02, 5.3690e+01, 1.5922e+02, 4.1801e+01, 1.0000e-01],
+         [1.2437e+02, 3.6571e+01, 1.3764e+02, 3.0967e+01, 4.0000e-01],
+         [1.3055e+02, 3.9212e+01, 1.3808e+02, 3.2169e+01, 4.0000e-01],
+         [1.3548e+02, 5.0519e+01, 1.4388e+02, 3.7452e+01, 1.0000e-01],
+         [1.5678e+02, 4.5303e+01, 1.5742e+02, 3.8882e+01, 1.0000e-01],
+         [1.8244e+02, 5.5058e+01, 1.8336e+02, 4.6029e+01, 1.0000e-01],
+         [1.5777e+02, 4.1027e+01, 1.7625e+02, 3.9518e+01, 4.0000e-01],
+         [1.6034e+02, 5.1811e+01, 1.6937e+02, 3.8278e+01, 3.0000e-01]],
+        [[1.5421e+02, 4.9722e+01, 1.6525e+02, 4.7350e+01, 1.0000e-01],
+         [1.4478e+02, 4.5983e+01, 1.6969e+02, 4.4074e+01, 1.0000e-01],
+         [1.2203e+02, 3.7879e+01, 1.4366e+02, 3.2427e+01, 4.0000e-01],
+         [1.4204e+02, 3.6835e+01, 1.4476e+02, 3.3611e+01, 4.0000e-01],
+         [1.3696e+02, 3.6457e+01, 1.5524e+02, 3.9908e+01, 1.0000e-01],
+         [1.5327e+02, 4.1939e+01, 1.6558e+02, 4.0494e+01, 1.0000e-01],
+         [1.7097e+02, 5.0252e+01, 1.9464e+02, 4.8392e+01, 1.0000e-01],
+         [1.6035e+02, 4.3440e+01, 1.8212e+02, 4.0797e+01, 4.0000e-01],
+         [1.6287e+02, 3.7246e+01, 1.8083e+02, 4.0706e+01, 3.0000e-01]],
+        [[1.5726e+02, 5.9913e+01, 1.7706e+02, 5.0008e+01, 1.0000e-01],
+         [1.5432e+02, 4.4744e+01, 1.7977e+02, 4.6262e+01, 1.0000e-01],
+         [1.2467e+02, 4.5630e+01, 1.5284e+02, 3.4386e+01, 4.0000e-01],
+         [1.4183e+02, 4.4911e+01, 1.5293e+02, 3.5370e+01, 4.0000e-01],
+         [1.5110e+02, 4.9883e+01, 1.6657e+02, 4.2387e+01, 1.0000e-01],
+         [1.5524e+02, 3.8661e+01, 1.6995e+02, 4.1652e+01, 1.0000e-01],
+         [1.8591e+02, 5.3852e+01, 2.0592e+02, 5.0769e+01, 1.0000e-01],
+         [1.7074e+02, 5.6696e+01, 1.9298e+02, 4.3137e+01, 4.0000e-01],
+         [1.7146e+02, 5.5933e+01, 1.9233e+02, 4.3151e+01, 3.0000e-01]],
+        [[1.6709e+02, 4.9402e+01, 1.8887e+02, 5.2678e+01, 1.0000e-01],
+         [1.5873e+02, 4.3659e+01, 1.8486e+02, 4.7520e+01, 1.0000e-01],
+         [1.3042e+02, 4.5745e+01, 1.5878e+02, 3.5959e+01, 4.0000e-01],
+         [1.4040e+02, 3.9036e+01, 1.5861e+02, 3.6812e+01, 4.0000e-01],
+         [1.5646e+02, 5.4083e+01, 1.7748e+02, 4.4851e+01, 1.0000e-01],
+         [1.5348e+02, 4.5514e+01, 1.7730e+02, 4.3289e+01, 1.0000e-01],
+         [1.7476e+02, 5.6287e+01, 2.1724e+02, 5.3134e+01, 1.0000e-01],
+         [1.7717e+02, 4.1566e+01, 2.0408e+02, 4.5604e+01, 4.0000e-01],
+         [1.5996e+02, 4.7388e+01, 2.0383e+02, 4.5603e+01, 3.0000e-01]]])
 
-colors = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
+traj_gt = positions[:, :, :2]
+traj_fake = positions[:, :, 2:4]
+colors = positions[0, :, -1]
+#colors = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
 
 
 def init():
@@ -34,13 +93,15 @@ def update(i, scatterplot, positions, colors):
 fig = plt.figure()
 scatterplot = plt.scatter([], [], s=10)
 
-plt.xlim(-2, 15)
-plt.ylim(0, 15)
+plt.xlim(0,1000)
+plt.ylim(0,1000)
 
 plt.xlabel('Trajectory x coordinate value')
 plt.ylabel('Trajectory y coordinate value')
-plt.title("Simulated Trajectories")
-anim = animation.FuncAnimation(fig, update, init_func=init, fargs=(scatterplot, positions, colors), interval=500,
-                               frames=12, blit=True, repeat=True)
-# anim.save('SimulatedTraj3.gif', writer='imagemagick', fps=2)
+plt.title("Ground Truth Trajectories")
+#plt.title("Max Speed for All")
+anim = animation.FuncAnimation(fig, update, init_func=init, fargs=(scatterplot, traj_gt, colors), interval=800,
+                               frames=6, blit=True, repeat=True)
+#anim.save('CD_GT_MaxAllPeds.gif', writer='imagemagick', fps=1)
+#anim.save('CD_SimTraj_MaxSpeed.gif', writer='imagemagick', fps=1)
 plt.show()

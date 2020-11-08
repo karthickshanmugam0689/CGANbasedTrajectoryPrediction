@@ -282,7 +282,7 @@ class TrajectoryGenerator(nn.Module):
         pred_traj_fake_rel, final_decoder_h = decoder_out
 
         # LOGGING THE OUTPUT OF ALL SEQUENCES TO TEST THE SPEED AND TRAJECTORIES
-        if train_or_test == 0:
+        if train_or_test == 1:
             outputs = {}
             for _, (start, end) in enumerate(seq_start_end):
                 start = start.item()

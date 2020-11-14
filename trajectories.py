@@ -9,8 +9,6 @@ import torch
 from torch.utils.data import Dataset
 from constants import *
 
-logger = logging.getLogger(__name__)
-
 
 def data_loader(path, metric):
     dset = TrajectoryDataset(
@@ -28,7 +26,7 @@ def data_loader(path, metric):
 
 def seq_collate(data):
     (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed,
-     pred_ped_abs_speed, ped_features) = zip(*data)
+     pred_ped_abs_speed, sequences_index) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -42,10 +40,9 @@ def seq_collate(data):
     pred_ped_abs_speed = torch.cat(pred_ped_abs_speed, dim=0).permute(2, 0, 1)
     seq_start_end = torch.LongTensor(seq_start_end)
     loss_mask = torch.cat(loss_mask_list, dim=0)
-    ped_features = torch.cat(ped_features, dim=0)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, loss_mask, seq_start_end, obs_ped_abs_speed,
-        pred_ped_abs_speed, ped_features
+        pred_ped_abs_speed, sequences_index
     ]
 
     return tuple(out)
@@ -147,7 +144,7 @@ class TrajectoryDataset(Dataset):
 
                     curr_ped_dist = np.sqrt(np.add(curr_ped_x_axis_new, curr_ped_y_axis_new))
                     # Since each frame is taken with an interval of 0.4, we divide the distance with 0.4 to get speed
-                    curr_ped_abs_speed = curr_ped_dist / 0.4
+                    curr_ped_abs_speed = curr_ped_dist / FRAMES_PER_SECOND
                     curr_ped_abs_speed = [sigmoid(x) for x in curr_ped_abs_speed]
                     curr_ped_abs_speed = np.around(curr_ped_abs_speed, decimals=4)
                     curr_ped_abs_speed = np.transpose(curr_ped_abs_speed)
@@ -171,41 +168,13 @@ class TrajectoryDataset(Dataset):
                     ped_abs_speed.append(_curr_ped_abs_speed[:num_peds_considered])
                     seq_list.append(curr_seq[:num_peds_considered])
                     seq_list_rel.append(curr_seq_rel[:num_peds_considered])
-                    ped_seq = curr_seq[:num_peds_considered]
-                    ped_speed_feature = _curr_ped_abs_speed[:num_peds_considered]
-
-                    # DISTANCE, POSITION, SPEED FEATURE CONCAT EXTRACTION
-                    # Calculating the nearby pedestrian distance and speed as a preprocessing step to increase the speed
-                    # of model run
-                    max_ped_feature = np.zeros((num_peds_considered, 57, 3))
-                    last_pos_info = ped_seq[:, :, OBS_LEN - 1]
-                    next_pos_speed = ped_speed_feature[:, OBS_LEN]
-                    ped_wise_feature = []
-                    for a in last_pos_info:
-                        curr_ped_feature = []
-                        for b, speed in zip(last_pos_info, next_pos_speed):
-                            if np.array_equal(a, b):
-                                relative_pos = np.array([0.0, 0.0])
-                            else:
-                                relative_pos = b - a
-                            speed = speed
-                            concat = np.concatenate([relative_pos.reshape(1, 2), speed.reshape(1, 1)], axis=1)
-                            curr_ped_feature.append(concat)
-                        curr_ped_feature = np.concatenate(curr_ped_feature, axis=0)
-                        ped_wise_feature.append(np.expand_dims(curr_ped_feature, axis=0))
-                    ped_wise_feature = np.concatenate(ped_wise_feature, axis=0)
-                    max_ped_feature[0:num_peds_considered, 0:num_peds_considered, :] = \
-                        ped_wise_feature[0:num_peds_considered, :, :]
-                    features.append(max_ped_feature)
 
         self.num_seq = len(seq_list)
         seq_list = np.concatenate(seq_list, axis=0)
         seq_list_rel = np.concatenate(seq_list_rel, axis=0)
         ped_abs_speed = np.concatenate(ped_abs_speed, axis=0)
-        features = np.concatenate(features, axis=0)
         loss_mask_list = np.concatenate(loss_mask_list, axis=0)
         ped_abs_speed = torch.from_numpy(ped_abs_speed).type(torch.float)
-        self.ped_features = torch.from_numpy(features).type(torch.float)
 
         # Convert numpy -> Torch Tensor
         self.obs_traj = torch.from_numpy(
@@ -226,6 +195,7 @@ class TrajectoryDataset(Dataset):
             (start, end)
             for start, end in zip(cum_start_idx, cum_start_idx[1:])
         ]
+        self.cum_start_idx = torch.from_numpy([0] + np.cumsum(num_peds_in_seq))
 
     def __len__(self):
         return self.num_seq
@@ -236,6 +206,6 @@ class TrajectoryDataset(Dataset):
             self.obs_traj[start:end, :], self.pred_traj[start:end, :],
             self.obs_traj_rel[start:end, :], self.pred_traj_rel[start:end, :],
             self.loss_mask[start:end, :], self.obs_ped_abs_speed[start:end, :],
-            self.pred_ped_abs_speed[start:end, :], self.ped_features[start:end, :]
+            self.pred_ped_abs_speed[start:end, :], self.cum_start_idx
         ]
         return out

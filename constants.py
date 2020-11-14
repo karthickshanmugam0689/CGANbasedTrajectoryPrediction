@@ -4,7 +4,7 @@ PRED_LEN = 12
 TRAIN_DATASET_PATH = 'datasets/eth/train'
 VAL_DATASET_PATH = 'datasets/eth/val'
 TEST_DATASET_PATH = 'datasets/eth/test'
-CHECKPOINT_NAME = 'Checkpoints/ETH/model_checkpoint.pt'
+CHECKPOINT_NAME = 'Checkpoints/check_point.pt'
 
 # DATASET FLAGS FOR ANALYZING THE MAX SPEEDS.
 ETH = 1
@@ -22,7 +22,8 @@ ZARA2_MAX_SPEED = 2.2537
 NUM_WORKERS = 4
 BATCH = 32
 BATCH_NORM = False
-ACTIVATION = 'relu'
+ACTIVATION_RELU = 'relu'
+ACTIVATION_LEAKYRELU = 'leakyrelu'
 
 # ENCODER DECODER HIDDEN DIMENSION OPTIONS
 H_DIM = 32
@@ -46,8 +47,9 @@ POOLING_TYPE = True
 USE_GPU = 0
 
 # SPEED CONTROL FLAGS
-TEST_METRIC = 0  # 0 for ground_truth speed. To simulate trajectories, change the flag to 1. This flag is used during testing and inference phase.
+TEST_METRIC = 1  # 0 for ground_truth speed. To simulate trajectories, change the flag to 1. This flag is used during testing and inference phase.
 TRAIN_METRIC = 0  # Used for training the model with the ground truth
+VERIFY_OUTPUT_SPEED = 1
 
 # ADD_SPEED_EVERY_FRAME, STOP_PED, CONSTANT_SPEED_FOR_ALL_PED, ADD_SPEED_PARTICULAR_FRAME - Only one flag out of the 4 can be activated at once.
 ADD_SPEED_EVERY_FRAME = True  # SPEED_TO_ADD will be active if ADD_SPEED_EVERY_FRAME is True
@@ -61,6 +63,9 @@ CONSTANT_SPEED = 0.5
 ADD_SPEED_PARTICULAR_FRAME = False  # FRAMES_TO_ADD_SPEED flag will be active only if ADD_SPEED_PARTICULAR_FRAME is True
 FRAMES_TO_ADD_SPEED = []  # Provide a value between 0 to length of (predicted traj-1)
 MAX_SPEED = 0.9999
+
+ANIMATED_VISUALIZATION_CHECK = 1
+FRAMES_PER_SECOND = 0.4
 
 G_STEPS = 1
 D_STEPS = 2

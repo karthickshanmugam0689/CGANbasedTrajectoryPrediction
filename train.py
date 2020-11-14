@@ -138,13 +138,12 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
         batch = [tensor.cuda() for tensor in batch]
     else:
         batch = [tensor for tensor in batch]
-    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed,
-     ped_features) = batch
+    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, _) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
 
-    generator_out, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
-                                 pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+    generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
+                                 pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD)
 
     pred_traj_fake_rel = generator_out
     pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -176,8 +175,7 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
         batch = [tensor.cuda() for tensor in batch]
     else:
         batch = [tensor for tensor in batch]
-    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed,
-     ped_features) = batch
+    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, _) = batch
 
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
@@ -186,8 +184,8 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
     loss_mask = loss_mask[:, OBS_LEN:]
 
     for _ in range(BEST_K):
-        generator_out, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
-                                     TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+        generator_out = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed, pred_traj_gt,
+                                     TRAIN_METRIC, SPEED_TO_ADD)
 
         pred_traj_fake_rel = generator_out
         pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
@@ -231,10 +229,7 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
     d_losses = []
     metrics = {}
     g_l2_losses_abs, g_l2_losses_rel = ([],) * 2
-    disp_error = []
-    f_disp_error = []
-    mean_speed_disp_error = []
-    final_speed_disp_error = []
+    disp_error, f_disp_error, mean_speed_disp_error, final_speed_disp_error = [], [], [], []
     total_traj = 0
     loss_mask_sum = 0
     generator.eval()
@@ -245,10 +240,10 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
             else:
                 batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed,
-             pred_ped_speed, ped_features) = batch
+             pred_ped_speed, _) = batch
 
-            pred_traj_fake_rel, _ = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
-                                              pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD, ped_features)
+            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
+                                              pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD)
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
             loss_mask = loss_mask[:, OBS_LEN:]
 
@@ -256,8 +251,8 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
                 pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
                 pred_traj_fake_rel, loss_mask
             )
-            ade = cal_ade(pred_traj_gt, pred_traj_fake)
-            fde = cal_fde(pred_traj_gt, pred_traj_fake)
+            ade = displacement_error(pred_traj_gt, pred_traj_fake)
+            fde = final_displacement_error(pred_traj_gt, pred_traj_fake)
 
             last_pos = obs_traj[-1]
             traj_for_speed_cal = torch.cat([last_pos.unsqueeze(dim=0), pred_traj_fake], dim=0)
@@ -304,16 +299,6 @@ def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake
     g_l2_loss_abs = l2_loss(pred_traj_fake, pred_traj_gt, loss_mask, mode='sum')
     g_l2_loss_rel = l2_loss(pred_traj_fake_rel, pred_traj_gt_rel, loss_mask, mode='sum')
     return g_l2_loss_abs, g_l2_loss_rel
-
-
-def cal_ade(pred_traj_gt, pred_traj_fake):
-    ade = displacement_error(pred_traj_fake, pred_traj_gt)
-    return ade
-
-
-def cal_fde(pred_traj_gt, pred_traj_fake):
-    fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1])
-    return fde
 
 
 def cal_msae(real_speed, fake_traj):

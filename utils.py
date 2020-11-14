@@ -1,5 +1,6 @@
 import torch
 import random
+import os
 
 
 def bce_loss(input, target):
@@ -83,3 +84,8 @@ def relative_to_abs(rel_traj, start_pos):
     start_pos = torch.unsqueeze(start_pos, dim=1)
     abs_traj = displacement + start_pos
     return abs_traj.permute(1, 0, 2)
+
+
+def get_dataset_name(path):
+    dataset_name = os.path.basename(os.path.dirname(path))
+    return dataset_name

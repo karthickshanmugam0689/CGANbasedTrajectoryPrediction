@@ -16,10 +16,6 @@ Initially, clone the repo:
 git clone https://github.com/VishalSowrirajan/CGANbasedTrajectoryPrediction.git
 ````
 
-````
-python setup.py install
-````
-
 To install all dependencies, run:
 ````
 pip install -r requirements.txt

@@ -3,16 +3,15 @@ import pickle
 from matplotlib import pyplot as plt
 from matplotlib import animation
 
-with open('ResultTrajectories.pkl', 'rb') as f:
-    a = pickle.load(f)
-    for b in a:
-        print(b.keys())
-        print("Enter the sequence you want to visualize")
-        seq_start = int(input("Enter the sequence start: "))
-        seq_end = int(input("Enter the sequence end:"))
-        positions = b.get((seq_start, seq_end))
-        if positions.size(0) > 0:
-            break
+with open('Sequences.pkl', 'rb') as f:
+    sequences = pickle.load(f)
+
+with open('SimulatedTraj.pkl', 'rb') as f:
+    trajectories = pickle.load(f)
+    print("Enter the sequence you want to visualize", sequences)
+    seq_start = int(input("Enter the sequence start: "))
+    seq_end = int(input("Enter the sequence end:"))
+    positions = trajectories[:, seq_start:seq_end, :]
 
 num_ped = positions.size(1)
 
@@ -34,6 +33,7 @@ def update(i, scatterplot, positions, colors):
 fig = plt.figure()
 scatterplot = plt.scatter([], [], s=10)
 
+# Adjust the x and y limits according to the min and max range from the trajectories for better visualization
 plt.xlim(-2, 15)
 plt.ylim(0, 15)
 
@@ -41,6 +41,5 @@ plt.xlabel('Trajectory x coordinate value')
 plt.ylabel('Trajectory y coordinate value')
 plt.title("Simulated Trajectories")
 anim = animation.FuncAnimation(fig, update, init_func=init, fargs=(scatterplot, positions, colors), interval=500,
-                               frames=12, blit=True, repeat=True)
-# anim.save('SimulatedTraj3.gif', writer='imagemagick', fps=2)
+                               frames=PRED_LEN, blit=True, repeat=True)
 plt.show()

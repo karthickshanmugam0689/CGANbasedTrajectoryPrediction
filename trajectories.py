@@ -26,7 +26,7 @@ def data_loader(path, metric):
 
 def seq_collate(data):
     (obs_seq_list, pred_seq_list, obs_seq_rel_list, pred_seq_rel_list, loss_mask_list, obs_ped_abs_speed,
-     pred_ped_abs_speed, sequences_index) = zip(*data)
+     pred_ped_abs_speed) = zip(*data)
 
     _len = [len(seq) for seq in obs_seq_list]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -42,7 +42,7 @@ def seq_collate(data):
     loss_mask = torch.cat(loss_mask_list, dim=0)
     out = [
         obs_traj, pred_traj, obs_traj_rel, pred_traj_rel, loss_mask, seq_start_end, obs_ped_abs_speed,
-        pred_ped_abs_speed, sequences_index
+        pred_ped_abs_speed
     ]
 
     return tuple(out)
@@ -195,7 +195,6 @@ class TrajectoryDataset(Dataset):
             (start, end)
             for start, end in zip(cum_start_idx, cum_start_idx[1:])
         ]
-        self.cum_start_idx = torch.from_numpy([0] + np.cumsum(num_peds_in_seq))
 
     def __len__(self):
         return self.num_seq
@@ -206,6 +205,6 @@ class TrajectoryDataset(Dataset):
             self.obs_traj[start:end, :], self.pred_traj[start:end, :],
             self.obs_traj_rel[start:end, :], self.pred_traj_rel[start:end, :],
             self.loss_mask[start:end, :], self.obs_ped_abs_speed[start:end, :],
-            self.pred_ped_abs_speed[start:end, :], self.cum_start_idx
+            self.pred_ped_abs_speed[start:end, :]
         ]
         return out

@@ -138,7 +138,7 @@ def discriminator_step(batch, generator, discriminator, d_loss_fn, optimizer_d):
         batch = [tensor.cuda() for tensor in batch]
     else:
         batch = [tensor for tensor in batch]
-    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, _) = batch
+    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
 
@@ -175,7 +175,7 @@ def generator_step(batch, generator, discriminator, g_loss_fn, optimizer_g):
         batch = [tensor.cuda() for tensor in batch]
     else:
         batch = [tensor for tensor in batch]
-    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, _) = batch
+    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
 
     losses = {}
     loss = torch.zeros(1).to(pred_traj_gt)
@@ -240,7 +240,7 @@ def check_accuracy(loader, generator, discriminator, d_loss_fn):
             else:
                 batch = [tensor for tensor in batch]
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed,
-             pred_ped_speed, _) = batch
+             pred_ped_speed) = batch
 
             pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, obs_ped_speed, pred_ped_speed,
                                               pred_traj_gt, TRAIN_METRIC, SPEED_TO_ADD)

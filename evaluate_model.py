@@ -17,20 +17,13 @@ def evaluate_helper(error, seq_start_end):
 
 def evaluate(loader, generator, num_samples):
     ade_outer, fde_outer, simulated_output, total_traj, sequences = [], [], [], [], []
-    index = 0
     with torch.no_grad():
         for batch in loader:
             if USE_GPU:
                 batch = [tensor.cuda() for tensor in batch]
             else:
                 batch = [tensor for tensor in batch]
-            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed, sequences_index) = batch
-
-            # Used to take the sequence list for visualization
-            if ANIMATED_VISUALIZATION_CHECK:
-                if index == 0:
-                    sequences.append(sequences_index[0])
-                    index += 1
+            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, loss_mask, seq_start_end, obs_ped_speed, pred_ped_speed) = batch
 
             ade, fde, sim_op = [], [], []
             total_traj.append(pred_traj_gt.size(1))
@@ -47,6 +40,10 @@ def evaluate(loader, generator, num_samples):
                 fde.append(final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], mode='raw'))
                 sim_op.append(pred_traj_fake)
 
+                for _, (start, end) in enumerate(seq_start_end):
+                    num_ped = end - start
+                    sequences.append(num_ped)
+
             ade_outer.append(evaluate_helper(torch.stack(ade, dim=1), seq_start_end))
             fde_outer.append(evaluate_helper(torch.stack(fde, dim=1), seq_start_end))
             simulated_output.append(torch.cat(sim_op, dim=0))
@@ -54,8 +51,10 @@ def evaluate(loader, generator, num_samples):
         ade = sum(ade_outer) / (sum(total_traj) * PRED_LEN)
         fde = sum(fde_outer) / (sum(total_traj))
         simulated_traj_for_visualization = torch.cat(simulated_output, dim=1)
+        sequences = torch.cumsum(torch.stack(sequences, dim=0), dim=0)
 
         if TEST_METRIC and VERIFY_OUTPUT_SPEED:
+            # The speed can be verified for different sequences and this method runs for n number of batches.
             verify_speed(simulated_traj_for_visualization, sequences)
 
         if ANIMATED_VISUALIZATION_CHECK:
